@@ -35,12 +35,15 @@ Key espresso principles to draw on:
 - Weak or watery → reduce yield (stop pulling earlier).
 - Astringent or dry → grind coarser, check puck prep.
 
+If previous shots for the same roast are provided, reference them explicitly — acknowledge
+what changed and whether it helped, and build on that trajectory.
+
 Always give 2–3 numbered, specific adjustments. Mention the direction and a rough magnitude
 where possible (e.g. "try going 0.5 clicks finer"). Explain briefly why each change helps.
-End with one sentence of encouragement. Keep total response under 180 words."""
+End with one sentence of encouragement. Keep total response under 200 words."""
 
 
-def generate_advice(shot: Shot) -> str:
+def generate_advice(shot: Shot, prev_shots: list) -> str:
     ratio = f"1:{shot.ratio}" if shot.ratio else "unknown"
     time_note = (
         "under-extracted (too fast)" if shot.time_s < 25 else
@@ -48,21 +51,33 @@ def generate_advice(shot: Shot) -> str:
         "within ideal range"
     )
 
-    user_msg = f"""Shot log:
+    history = ""
+    if prev_shots:
+        history = "\n\nPrevious shots with this same roast (oldest → newest):\n"
+        for ps in reversed(prev_shots):
+            history += (
+                f"- Grind {ps.grind_size}, {ps.dose_g}g→{ps.yield_g}g, "
+                f"{ps.time_s}s, rated {ps.rating}/5"
+            )
+            if ps.tasting_notes:
+                history += f': "{ps.tasting_notes}"'
+            history += "\n"
+
+    user_msg = f"""Current shot:
 - Roast: {shot.roast}
 - Dose: {shot.dose_g}g in → {shot.yield_g}g out (ratio {ratio})
 - Extraction time: {shot.time_s}s ({time_note})
 - Grind size: {shot.grind_size}
 - Rating: {shot.rating}/5
 - Tasting notes: {shot.tasting_notes or 'none provided'}
-- Additional notes: {shot.notes or 'none'}
+- Additional notes: {shot.notes or 'none'}{history}
 
 What should I adjust for my next shot?"""
 
     try:
         response = _anthropic.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=350,
             system=[{
                 "type": "text",
                 "text": COACH_SYSTEM_PROMPT,
@@ -105,6 +120,13 @@ class ShotOut(BaseModel):
     class Config:
         from_attributes = True
 
+class RoastSummary(BaseModel):
+    roast: str
+    count: int
+    avg_rating: float
+    best_shot: Optional[ShotOut]
+    shots: list[ShotOut]
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +140,14 @@ def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
-    row.advice = generate_advice(row)
+    prev = (
+        db.query(Shot)
+        .filter(Shot.roast == row.roast, Shot.id != row.id)
+        .order_by(Shot.timestamp.desc())
+        .limit(3)
+        .all()
+    )
+    row.advice = generate_advice(row, prev)
     db.commit()
     db.refresh(row)
     return row
@@ -142,6 +171,33 @@ def delete_shot(shot_id: int, db: Session = Depends(get_db)):
     db.delete(shot)
     db.commit()
     return {"ok": True}
+
+@app.get("/roasts", response_model=list[RoastSummary])
+def list_roasts(db: Session = Depends(get_db)):
+    roast_names = (
+        db.query(Shot.roast)
+        .group_by(Shot.roast)
+        .order_by(func.max(Shot.timestamp).desc())
+        .all()
+    )
+    result = []
+    for (roast,) in roast_names:
+        shots = (
+            db.query(Shot)
+            .filter(Shot.roast == roast)
+            .order_by(Shot.timestamp.desc())
+            .all()
+        )
+        avg_rating = sum(s.rating for s in shots) / len(shots)
+        best = max(shots, key=lambda s: (s.rating, s.timestamp))
+        result.append(RoastSummary(
+            roast=roast,
+            count=len(shots),
+            avg_rating=round(avg_rating, 1),
+            best_shot=ShotOut.model_validate(best),
+            shots=[ShotOut.model_validate(s) for s in shots],
+        ))
+    return result
 
 @app.get("/stats")
 def stats(db: Session = Depends(get_db)):
