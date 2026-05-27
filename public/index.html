@@ -16,8 +16,8 @@
   .header-right { display: flex; gap: 0.6rem; align-items: center; }
   .btn-share { background: rgba(200,147,90,0.15); color: #c8935a; border: 1px solid rgba(200,147,90,0.3); border-radius: 7px; padding: 0.35rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
   .btn-share:hover { background: rgba(200,147,90,0.25); }
-  .btn-settings { background: none; border: none; color: rgba(255,255,255,0.35); font-size: 1.1rem; cursor: pointer; padding: 0.2rem 0.4rem; }
-  .btn-settings:hover { color: rgba(255,255,255,0.7); }
+  .btn-settings { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.6); border-radius: 7px; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 0.35rem 0.8rem; }
+  .btn-settings:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
   .layout { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 54px); }
 
@@ -143,7 +143,7 @@
   </div>
   <div class="header-right">
     <button class="btn-share" onclick="shareProfile()">Share profile</button>
-    <button class="btn-settings" onclick="openSettings()" title="Settings">⚙</button>
+    <button class="btn-settings" onclick="openSettings()">Settings</button>
   </div>
 </header>
 
