@@ -5,20 +5,47 @@ from database import Base
 class Shot(Base):
     __tablename__ = "shots"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    timestamp   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    roast       = Column(String(120))
-    grind_size  = Column(Float)
-    dose_g      = Column(Float)   # input grams
-    yield_g     = Column(Float)   # output grams
-    time_s      = Column(Integer) # extraction seconds
-    rating      = Column(Integer) # 1–5
+    id            = Column(Integer, primary_key=True, index=True)
+    timestamp     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    roast         = Column(String(120))
+    grind_size    = Column(Float)
+    dose_g        = Column(Float)
+    yield_g       = Column(Float)
+    time_s        = Column(Integer)
+    rating        = Column(Integer)
     tasting_notes = Column(Text, default="")
-    notes       = Column(Text, default="")
-    advice      = Column(Text, default="")
+    notes         = Column(Text, default="")
+    advice        = Column(Text, default="")
 
     @property
     def ratio(self):
         if self.dose_g and self.dose_g > 0:
             return round(self.yield_g / self.dose_g, 2)
         return None
+
+
+class Recipe(Base):
+    __tablename__ = "recipes"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(120))
+    roast      = Column(String(120))
+    grind_size = Column(Float)
+    dose_g     = Column(Float)
+    yield_g    = Column(Float)
+    time_s     = Column(Integer)
+    notes      = Column(Text, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    shot_id    = Column(Integer, nullable=True)
+
+    @property
+    def ratio(self):
+        if self.dose_g and self.dose_g > 0:
+            return round(self.yield_g / self.dose_g, 2)
+        return None
+
+
+class Config(Base):
+    __tablename__ = "config"
+    key   = Column(String(50), primary_key=True)
+    value = Column(Text)

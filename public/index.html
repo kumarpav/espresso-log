@@ -4,13 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Espresso Coach</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #1a1008; min-height: 100vh; color: #f0e6d3; }
 
-  header { background: rgba(0,0,0,0.4); padding: 1rem 1.5rem; display: flex; align-items: baseline; gap: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  header { background: rgba(0,0,0,0.4); padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .header-left { display: flex; align-items: baseline; gap: 0.75rem; }
   header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; color: #c8935a; }
   header span { font-size: 0.8rem; color: rgba(255,255,255,0.35); }
+  .header-right { display: flex; gap: 0.6rem; align-items: center; }
+  .btn-share { background: rgba(200,147,90,0.15); color: #c8935a; border: 1px solid rgba(200,147,90,0.3); border-radius: 7px; padding: 0.35rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  .btn-share:hover { background: rgba(200,147,90,0.25); }
+  .btn-settings { background: none; border: none; color: rgba(255,255,255,0.35); font-size: 1.1rem; cursor: pointer; padding: 0.2rem 0.4rem; }
+  .btn-settings:hover { color: rgba(255,255,255,0.7); }
 
   .layout { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 54px); }
 
@@ -19,11 +26,12 @@
   .form-panel h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.35); margin-bottom: 1.25rem; }
   .field { margin-bottom: 1rem; }
   .field label { display: block; font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem; font-weight: 500; }
-  .field input, .field textarea { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 0.55rem 0.75rem; color: #f0e6d3; font-size: 0.9rem; outline: none; font-family: inherit; }
+  .field input, .field textarea, .field select { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 0.55rem 0.75rem; color: #f0e6d3; font-size: 0.9rem; outline: none; font-family: inherit; }
   .field input:focus, .field textarea:focus { border-color: #c8935a; }
   .field textarea { resize: vertical; min-height: 64px; }
   .field input::placeholder, .field textarea::placeholder { color: rgba(255,255,255,0.2); }
   .field .hint { font-size: 0.7rem; color: rgba(255,255,255,0.28); margin-top: 0.25rem; }
+  .field select option { background: #2a1a0a; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   .rating-row { display: flex; gap: 0.4rem; }
   .star { font-size: 1.4rem; cursor: pointer; opacity: 0.25; transition: opacity 0.1s; }
@@ -34,7 +42,6 @@
   .spinner { width: 16px; height: 16px; border: 2px solid rgba(26,16,8,0.3); border-top-color: #1a1008; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Advice panel ── */
   .advice-panel { background: rgba(200,147,90,0.1); border: 1px solid rgba(200,147,90,0.3); border-radius: 12px; padding: 1rem 1.1rem; margin-top: 1rem; display: none; }
   .advice-panel.show { display: block; }
   .advice-header { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #c8935a; font-weight: 700; margin-bottom: 0.6rem; }
@@ -42,8 +49,6 @@
 
   /* ── Right panel ── */
   .main-panel { display: flex; flex-direction: column; overflow: hidden; }
-
-  /* ── Stats bar ── */
   .stats-bar { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
   .stat { flex: 1; padding: 0.9rem 1rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
   .stat:last-child { border-right: none; }
@@ -54,12 +59,11 @@
   .tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
   .tab { flex: 1; padding: 0.65rem; text-align: center; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.4); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s; }
   .tab.active { color: #c8935a; border-bottom-color: #c8935a; }
-
-  /* ── Shot list ── */
   .tab-content { flex: 1; overflow-y: auto; padding: 1.1rem 1.25rem; display: none; }
   .tab-content.active { display: block; }
   .section-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.28); margin-bottom: 0.85rem; }
 
+  /* ── Shot cards ── */
   .shot-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; }
   .shot-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
   .shot-roast { font-weight: 700; font-size: 0.95rem; }
@@ -73,8 +77,10 @@
   .shot-advice { background: rgba(200,147,90,0.08); border-left: 2px solid #c8935a; border-radius: 0 6px 6px 0; padding: 0.6rem 0.8rem; margin-top: 0.4rem; }
   .shot-advice-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.8px; color: #c8935a; font-weight: 700; margin-bottom: 0.25rem; }
   .shot-advice-text { font-size: 0.8rem; color: rgba(255,255,255,0.7); line-height: 1.55; white-space: pre-wrap; }
-  .shot-footer { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
-  .btn-delete { background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 0.75rem; }
+  .shot-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+  .btn-sm-action { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); border-radius: 6px; padding: 0.25rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
+  .btn-sm-action:hover { background: rgba(200,147,90,0.15); color: #c8935a; border-color: rgba(200,147,90,0.3); }
+  .btn-delete { background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 0.75rem; padding: 0.25rem 0.5rem; }
   .btn-delete:hover { color: #e74c3c; }
 
   /* ── By roast ── */
@@ -88,13 +94,37 @@
   .roast-card.open .roast-chevron { transform: rotate(180deg); }
   .best-settings { background: rgba(200,147,90,0.1); border-top: 1px solid rgba(200,147,90,0.2); padding: 0.75rem 1.1rem; }
   .best-settings-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.8px; color: #c8935a; font-weight: 700; margin-bottom: 0.4rem; }
-  .best-settings-row { display: flex; gap: 1rem; flex-wrap: wrap; }
   .roast-shots { border-top: 1px solid rgba(255,255,255,0.06); padding: 0.75rem 1.1rem; display: none; }
   .roast-card.open .roast-shots { display: block; }
-  .roast-shot-row { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; }
-  .roast-shot-row:last-child { border-bottom: none; }
-  .roast-shot-params { color: rgba(255,255,255,0.5); }
-  .roast-shot-params strong { color: #f0e6d3; }
+
+  /* ── Progress charts ── */
+  .chart-section { margin-bottom: 1.75rem; }
+  .chart-title { font-size: 0.8rem; font-weight: 700; color: rgba(255,255,255,0.6); margin-bottom: 0.75rem; }
+  .chart-filter { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .filter-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.5); border-radius: 20px; padding: 0.2rem 0.7rem; font-size: 0.73rem; cursor: pointer; }
+  .filter-btn.active { background: rgba(200,147,90,0.2); border-color: rgba(200,147,90,0.4); color: #c8935a; }
+  .chart-wrap { background: rgba(0,0,0,0.2); border-radius: 10px; padding: 1rem; position: relative; height: 200px; }
+
+  /* ── Recipes ── */
+  .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+  .recipe-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(200,147,90,0.2); border-radius: 12px; padding: 0.9rem 1rem; }
+  .recipe-name { font-weight: 700; font-size: 0.95rem; color: #c8935a; margin-bottom: 0.2rem; }
+  .recipe-roast { font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem; }
+  .recipe-metrics { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .recipe-notes { font-size: 0.78rem; color: rgba(255,255,255,0.4); font-style: italic; margin-bottom: 0.6rem; }
+  .recipe-actions { display: flex; gap: 0.4rem; }
+
+  /* ── Modals ── */
+  .modal-bg { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-bg.show { display: flex; }
+  .modal-box { background: #2a1a0a; border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 1.75rem; max-width: 380px; width: 90%; }
+  .modal-box h3 { font-size: 1rem; margin-bottom: 1rem; }
+  .modal-box input { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 0.55rem 0.75rem; color: #f0e6d3; font-size: 0.9rem; outline: none; margin-bottom: 0.75rem; }
+  .modal-box input:focus { border-color: #c8935a; }
+  .modal-btns { display: flex; gap: 0.5rem; justify-content: flex-end; }
+  .modal-btn { border: none; border-radius: 8px; padding: 0.5rem 1.1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .modal-btn-primary { background: #c8935a; color: #1a1008; }
+  .modal-btn-cancel { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
 
   .empty { text-align: center; color: rgba(255,255,255,0.22); font-size: 0.88rem; padding: 3rem 1rem; line-height: 1.7; }
 
@@ -107,12 +137,17 @@
 <body>
 
 <header>
-  <h1>☕ Espresso Coach</h1>
-  <span>log your shot · get better next time</span>
+  <div class="header-left">
+    <h1>☕ Espresso Coach</h1>
+    <span>log your shot · get better next time</span>
+  </div>
+  <div class="header-right">
+    <button class="btn-share" onclick="shareProfile()">Share profile</button>
+    <button class="btn-settings" onclick="openSettings()" title="Settings">⚙</button>
+  </div>
 </header>
 
 <div class="layout">
-
   <!-- Log form -->
   <div class="form-panel">
     <h2>Log a shot</h2>
@@ -121,45 +156,22 @@
       <input id="f-roast" type="text" placeholder="e.g. Ethiopia Yirgacheffe">
     </div>
     <div class="row2">
-      <div class="field">
-        <label>Dose (g in)</label>
-        <input id="f-dose" type="number" step="0.1" placeholder="18.0">
-      </div>
-      <div class="field">
-        <label>Yield (g out)</label>
-        <input id="f-yield" type="number" step="0.1" placeholder="36.0">
-      </div>
+      <div class="field"><label>Dose (g in)</label><input id="f-dose" type="number" step="0.1" placeholder="18.0"></div>
+      <div class="field"><label>Yield (g out)</label><input id="f-yield" type="number" step="0.1" placeholder="36.0"></div>
     </div>
     <div class="row2">
-      <div class="field">
-        <label>Time (seconds)</label>
-        <input id="f-time" type="number" placeholder="28">
-        <div class="hint">Aim for 25–35s</div>
-      </div>
-      <div class="field">
-        <label>Grind size</label>
-        <input id="f-grind" type="number" step="0.5" placeholder="12.0">
-        <div class="hint">Lower = finer</div>
-      </div>
+      <div class="field"><label>Time (seconds)</label><input id="f-time" type="number" placeholder="28"><div class="hint">Aim for 25–35s</div></div>
+      <div class="field"><label>Grind size</label><input id="f-grind" type="number" step="0.5" placeholder="12.0"><div class="hint">Lower = finer</div></div>
     </div>
     <div class="field">
       <label>Rating</label>
       <div class="rating-row" id="star-row">
-        <span class="star" data-v="1">★</span>
-        <span class="star" data-v="2">★</span>
-        <span class="star" data-v="3">★</span>
-        <span class="star" data-v="4">★</span>
-        <span class="star" data-v="5">★</span>
+        <span class="star" data-v="1">★</span><span class="star" data-v="2">★</span>
+        <span class="star" data-v="3">★</span><span class="star" data-v="4">★</span><span class="star" data-v="5">★</span>
       </div>
     </div>
-    <div class="field">
-      <label>Tasting notes</label>
-      <textarea id="f-tasting" placeholder="Sour, bitter, weak, chocolatey, bright citrus... be specific!"></textarea>
-    </div>
-    <div class="field">
-      <label>Other observations</label>
-      <textarea id="f-notes" placeholder="Puck prep, channelling, temperature, anything unusual..."></textarea>
-    </div>
+    <div class="field"><label>Tasting notes</label><textarea id="f-tasting" placeholder="Sour, bitter, weak, chocolatey... be specific!"></textarea></div>
+    <div class="field"><label>Other observations</label><textarea id="f-notes" placeholder="Puck prep, channelling, temperature..."></textarea></div>
     <button class="btn-log" id="log-btn" onclick="logShot()">
       <div class="spinner" id="spinner"></div>
       <span id="log-btn-text">Log shot &amp; get advice</span>
@@ -181,6 +193,8 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('all')">All shots</div>
       <div class="tab" onclick="switchTab('roasts')">By roast</div>
+      <div class="tab" onclick="switchTab('progress')">Progress</div>
+      <div class="tab" onclick="switchTab('recipes')">Recipes</div>
     </div>
     <div class="tab-content active" id="tab-all">
       <div class="section-label">Recent shots</div>
@@ -188,23 +202,73 @@
     </div>
     <div class="tab-content" id="tab-roasts">
       <div class="section-label">Roasts you've dialled in</div>
-      <div id="roasts-list"><div class="empty">No shots yet.</div></div>
+      <div id="roasts-list"></div>
+    </div>
+    <div class="tab-content" id="tab-progress">
+      <div class="chart-section">
+        <div class="chart-title">Rating over time</div>
+        <div class="chart-filter" id="rating-filter"></div>
+        <div class="chart-wrap"><canvas id="chart-rating"></canvas></div>
+      </div>
+      <div class="chart-section">
+        <div class="chart-title">Extraction time over time</div>
+        <div class="chart-filter" id="time-filter"></div>
+        <div class="chart-wrap"><canvas id="chart-time"></canvas></div>
+      </div>
+    </div>
+    <div class="tab-content" id="tab-recipes">
+      <div class="section-label">Saved recipes</div>
+      <div id="recipes-list"><div class="empty">No recipes saved yet.<br>Save a shot's settings as a recipe to repeat it later.</div></div>
     </div>
   </div>
+</div>
 
+<!-- Save recipe modal -->
+<div class="modal-bg" id="recipe-modal">
+  <div class="modal-box">
+    <h3>Save as recipe</h3>
+    <input id="recipe-name-input" type="text" placeholder="Recipe name (e.g. Morning dial-in)">
+    <input id="recipe-notes-input" type="text" placeholder="Notes (optional)">
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-cancel" onclick="closeRecipeModal()">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="confirmSaveRecipe()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="settings-modal">
+  <div class="modal-box">
+    <h3>Settings</h3>
+    <label style="font-size:0.78rem;color:rgba(255,255,255,0.5);display:block;margin-bottom:0.3rem">Display name (shown on public profile)</label>
+    <input id="settings-name" type="text" placeholder="Your name">
+    <div class="modal-btns">
+      <button class="modal-btn modal-btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="modal-btn modal-btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
 </div>
 
 <script>
 let selectedRating = 0;
 let currentTab = 'all';
+let pendingRecipeShot = null;
+let chartRating = null;
+let chartTime = null;
+let chartData = null;
+let activeRatingRoast = '__all__';
+let activeTimeRoast = '__all__';
+const ROAST_COLORS = ['#c8935a','#e8b88a','#a0d8b0','#88c8e8','#d8a8e8','#e8d888','#e88888'];
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   currentTab = name;
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['all','roasts'][i] === name));
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['all','roasts','progress','recipes'][i] === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'roasts') loadRoasts();
+  if (name === 'progress') loadProgress();
+  if (name === 'recipes') loadRecipes();
 }
 
 // ── Stars ─────────────────────────────────────────────────────────────────────
@@ -228,14 +292,10 @@ async function logShot() {
   setLoading(true);
   document.getElementById('advice-panel').classList.remove('show');
   const res = await fetch('/shots', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      roast, dose_g: dose, yield_g: yield_, time_s: time, grind_size: grind,
-      rating: selectedRating,
-      tasting_notes: document.getElementById('f-tasting').value.trim(),
-      notes: document.getElementById('f-notes').value.trim(),
-    })
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ roast, dose_g: dose, yield_g: yield_, time_s: time, grind_size: grind,
+      rating: selectedRating, tasting_notes: document.getElementById('f-tasting').value.trim(),
+      notes: document.getElementById('f-notes').value.trim() })
   });
   setLoading(false);
   if (res.ok) {
@@ -246,9 +306,7 @@ async function logShot() {
     }
     clearForm();
     load();
-  } else {
-    alert('Error logging shot.');
-  }
+  } else { alert('Error logging shot.'); }
 }
 
 function setLoading(on) {
@@ -264,16 +322,73 @@ function clearForm() {
   document.querySelectorAll('.star').forEach(s => s.classList.remove('on'));
 }
 
+// ── Delete shot ───────────────────────────────────────────────────────────────
 async function deleteShot(id) {
   if (!confirm('Delete this shot?')) return;
-  await fetch(`/shots/${id}`, { method: 'DELETE' });
+  await fetch(`/shots/${id}`, {method:'DELETE'});
   load();
   if (currentTab === 'roasts') loadRoasts();
+  if (currentTab === 'progress') loadProgress();
+}
+
+// ── Recipe modal ──────────────────────────────────────────────────────────────
+function openRecipeModal(shot) {
+  pendingRecipeShot = shot;
+  document.getElementById('recipe-name-input').value = '';
+  document.getElementById('recipe-notes-input').value = '';
+  document.getElementById('recipe-modal').classList.add('show');
+}
+function closeRecipeModal() {
+  document.getElementById('recipe-modal').classList.remove('show');
+  pendingRecipeShot = null;
+}
+async function confirmSaveRecipe() {
+  const name = document.getElementById('recipe-name-input').value.trim();
+  if (!name) { alert('Give your recipe a name.'); return; }
+  const s = pendingRecipeShot;
+  await fetch('/recipes', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, roast: s.roast, grind_size: s.grind_size, dose_g: s.dose_g,
+      yield_g: s.yield_g, time_s: s.time_s, notes: document.getElementById('recipe-notes-input').value.trim(),
+      shot_id: s.id })
+  });
+  closeRecipeModal();
+  if (currentTab === 'recipes') loadRecipes();
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function openSettings() {
+  const profile = await fetch('/api/profile').then(r => r.json());
+  document.getElementById('settings-name').value = profile.display_name || '';
+  document.getElementById('settings-modal').classList.add('show');
+}
+function closeSettings() { document.getElementById('settings-modal').classList.remove('show'); }
+async function saveSettings() {
+  const name = document.getElementById('settings-name').value.trim();
+  await fetch('/api/config', { method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ display_name: name }) });
+  closeSettings();
+}
+
+// ── Share profile ─────────────────────────────────────────────────────────────
+function shareProfile() {
+  const url = `${location.origin}/profile`;
+  navigator.clipboard.writeText(url).then(() => alert(`Profile URL copied!\n${url}`)).catch(() => alert(`Your profile: ${url}`));
+}
+
+// ── Prefill from recipe ───────────────────────────────────────────────────────
+function prefillFromRecipe(r) {
+  document.getElementById('f-roast').value = r.roast;
+  document.getElementById('f-dose').value = r.dose_g;
+  document.getElementById('f-yield').value = r.yield_g;
+  document.getElementById('f-time').value = r.time_s;
+  document.getElementById('f-grind').value = r.grind_size;
+  document.querySelectorAll('.tab')[0].click();
+  document.getElementById('f-roast').scrollIntoView({behavior:'smooth'});
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const starsHtml = n => '★'.repeat(n) + '☆'.repeat(5 - n);
-
 function timeAgo(ts) {
   const diff = (Date.now() - new Date(ts + 'Z').getTime()) / 1000;
   if (diff < 60) return 'just now';
@@ -283,34 +398,35 @@ function timeAgo(ts) {
 }
 
 function shotCardHtml(s, showRoast = true) {
-  return `
-    <div class="shot-card">
-      <div class="shot-header">
-        ${showRoast ? `<span class="shot-roast">${s.roast}</span>` : `<span class="shot-roast" style="font-weight:400;font-size:0.82rem;color:rgba(255,255,255,0.4)">${timeAgo(s.timestamp)}</span>`}
-        <div class="shot-meta">
-          <span class="shot-stars">${starsHtml(s.rating)}</span>
-          ${showRoast ? `<span class="shot-age">${timeAgo(s.timestamp)}</span>` : ''}
-        </div>
+  return `<div class="shot-card">
+    <div class="shot-header">
+      ${showRoast ? `<span class="shot-roast">${s.roast}</span>` : `<span style="font-size:0.8rem;color:rgba(255,255,255,0.35)">${timeAgo(s.timestamp)}</span>`}
+      <div class="shot-meta">
+        <span class="shot-stars">${starsHtml(s.rating)}</span>
+        ${showRoast ? `<span class="shot-age">${timeAgo(s.timestamp)}</span>` : ''}
       </div>
-      <div class="shot-metrics">
-        <span class="metric"><strong>${s.dose_g}g</strong> in</span>
-        <span class="metric"><strong>${s.yield_g}g</strong> out</span>
-        <span class="metric"><strong>${s.time_s}s</strong></span>
-        <span class="metric">grind <strong>${s.grind_size}</strong></span>
-        <span class="metric">ratio <strong>1:${s.ratio}</strong></span>
-      </div>
-      ${s.tasting_notes ? `<div class="shot-tasting">"${s.tasting_notes}"</div>` : ''}
-      ${s.advice ? `<div class="shot-advice"><div class="shot-advice-label">Coach says</div><div class="shot-advice-text">${s.advice}</div></div>` : ''}
-      <div class="shot-footer"><button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button></div>
-    </div>`;
+    </div>
+    <div class="shot-metrics">
+      <span class="metric"><strong>${s.dose_g}g</strong> in</span>
+      <span class="metric"><strong>${s.yield_g}g</strong> out</span>
+      <span class="metric"><strong>${s.time_s}s</strong></span>
+      <span class="metric">grind <strong>${s.grind_size}</strong></span>
+      <span class="metric">ratio <strong>1:${s.ratio}</strong></span>
+    </div>
+    ${s.tasting_notes ? `<div class="shot-tasting">"${s.tasting_notes}"</div>` : ''}
+    ${s.advice ? `<div class="shot-advice"><div class="shot-advice-label">Coach says</div><div class="shot-advice-text">${s.advice}</div></div>` : ''}
+    <div class="shot-footer">
+      <button class="btn-sm-action" onclick='openRecipeModal(${JSON.stringify(s)})'>Save as recipe</button>
+      <button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button>
+    </div>
+  </div>`;
 }
 
 // ── Render: all shots ─────────────────────────────────────────────────────────
 function renderShots(shots) {
   const el = document.getElementById('shots-list');
-  el.innerHTML = shots.length
-    ? shots.map(s => shotCardHtml(s)).join('')
-    : '<div class="empty">No shots yet.<br>Log your first pull and get coaching advice!</div>';
+  el.innerHTML = shots.length ? shots.map(s => shotCardHtml(s)).join('') :
+    '<div class="empty">No shots yet.<br>Log your first pull and get coaching advice!</div>';
 }
 
 // ── Render: by roast ──────────────────────────────────────────────────────────
@@ -319,37 +435,151 @@ function renderRoasts(roasts) {
   if (!roasts.length) { el.innerHTML = '<div class="empty">No shots yet.</div>'; return; }
   el.innerHTML = roasts.map(r => {
     const b = r.best_shot;
-    return `
-      <div class="roast-card" id="rc-${CSS.escape(r.roast)}">
-        <div class="roast-header" onclick="toggleRoast('${r.roast.replace(/'/g,"\\'")}')">
-          <span class="roast-name">${r.roast}</span>
-          <div class="roast-meta">
-            <span>${r.count} shot${r.count > 1 ? 's' : ''}</span>
-            <span class="roast-rating">${r.avg_rating}★ avg</span>
-            <span class="roast-chevron">▼</span>
-          </div>
+    return `<div class="roast-card" id="rc-${encodeURIComponent(r.roast)}">
+      <div class="roast-header" onclick="toggleRoast('${r.roast.replace(/'/g,"\\'")}')">
+        <span class="roast-name">${r.roast}</span>
+        <div class="roast-meta">
+          <span>${r.count} shot${r.count>1?'s':''}</span>
+          <span class="roast-rating">${r.avg_rating}★ avg</span>
+          <span class="roast-chevron">▼</span>
         </div>
-        ${b ? `
-        <div class="best-settings">
-          <div class="best-settings-label">Best shot settings (${starsHtml(b.rating)})</div>
-          <div class="best-settings-row">
-            <span class="metric">grind <strong>${b.grind_size}</strong></span>
-            <span class="metric"><strong>${b.dose_g}g</strong> in</span>
-            <span class="metric"><strong>${b.yield_g}g</strong> out</span>
-            <span class="metric"><strong>${b.time_s}s</strong></span>
-            <span class="metric">ratio <strong>1:${b.ratio}</strong></span>
-          </div>
-        </div>` : ''}
-        <div class="roast-shots">
-          ${r.shots.map(s => shotCardHtml(s, false)).join('')}
+      </div>
+      ${b ? `<div class="best-settings">
+        <div class="best-settings-label">Best shot (${starsHtml(b.rating)})</div>
+        <div class="shot-metrics">
+          <span class="metric">grind <strong>${b.grind_size}</strong></span>
+          <span class="metric"><strong>${b.dose_g}g</strong> in</span>
+          <span class="metric"><strong>${b.yield_g}g</strong> out</span>
+          <span class="metric"><strong>${b.time_s}s</strong></span>
+          <span class="metric">ratio <strong>1:${b.ratio}</strong></span>
         </div>
-      </div>`;
+      </div>` : ''}
+      <div class="roast-shots">${r.shots.map(s => shotCardHtml(s, false)).join('')}</div>
+    </div>`;
   }).join('');
 }
 
 function toggleRoast(roast) {
-  const card = document.getElementById(`rc-${CSS.escape(roast)}`);
+  const card = document.getElementById(`rc-${encodeURIComponent(roast)}`);
   if (card) card.classList.toggle('open');
+}
+
+// ── Progress charts ───────────────────────────────────────────────────────────
+async function loadProgress() {
+  const data = await fetch('/shots/chart').then(r => r.json());
+  chartData = data.by_roast;
+  const roasts = Object.keys(chartData);
+
+  buildFilterBtns('rating-filter', roasts, '__all__', r => { activeRatingRoast = r; renderRatingChart(); });
+  buildFilterBtns('time-filter', roasts, '__all__', r => { activeTimeRoast = r; renderTimeChart(); });
+  renderRatingChart();
+  renderTimeChart();
+}
+
+function buildFilterBtns(containerId, roasts, defaultActive, onChange) {
+  const c = document.getElementById(containerId);
+  const active = defaultActive;
+  const all = [['__all__', 'All roasts'], ...roasts.map(r => [r, r])];
+  c.innerHTML = all.map(([val, label]) =>
+    `<button class="filter-btn${val===active?' active':''}" onclick="filterBtnClick('${containerId}','${val.replace(/'/g,"\\'")}',this)">${label}</button>`
+  ).join('');
+  c._onChange = onChange;
+}
+
+function filterBtnClick(containerId, val, btn) {
+  const c = document.getElementById(containerId);
+  c.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (c._onChange) c._onChange(val);
+}
+
+function getChartPoints(metric) {
+  if (activeRatingRoast === '__all__') {
+    const allPts = Object.entries(chartData).flatMap(([, pts]) => pts);
+    allPts.sort((a, b) => a.id - b.id);
+    return [{ label: 'All shots', data: allPts.map(p => p[metric]), labels: allPts.map(p => p.date), color: ROAST_COLORS[0] }];
+  }
+  const pts = chartData[activeRatingRoast] || [];
+  return [{ label: activeRatingRoast, data: pts.map(p => p[metric]), labels: pts.map(p => p.date), color: ROAST_COLORS[0] }];
+}
+
+function renderRatingChart() {
+  const series = getChartPoints('rating');
+  renderLineChart('chart-rating', series, { min: 1, max: 5, stepSize: 1,
+    refLines: [{ y: 3, label: 'OK', color: 'rgba(255,255,255,0.1)' }] });
+}
+
+function renderTimeChart() {
+  const series = getChartPoints('time_s');
+  renderLineChart('chart-time', series, { min: 0,
+    refLines: [{ y: 25, color: 'rgba(100,200,100,0.3)' }, { y: 35, color: 'rgba(200,100,100,0.3)' }] });
+}
+
+function renderLineChart(canvasId, series, opts = {}) {
+  const ctx = document.getElementById(canvasId);
+  const existing = Chart.getChart(ctx);
+  if (existing) existing.destroy();
+
+  const labels = series[0]?.labels || [];
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: series.map((s, i) => ({
+        label: s.label,
+        data: s.data,
+        borderColor: s.color || ROAST_COLORS[i % ROAST_COLORS.length],
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        pointBackgroundColor: s.color || ROAST_COLORS[i % ROAST_COLORS.length],
+        pointRadius: 4,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: series.length > 1, labels: { color: 'rgba(255,255,255,0.5)', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { min: opts.min, max: opts.max, ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 11 }, stepSize: opts.stepSize }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      },
+      annotation: opts.refLines
+    }
+  });
+}
+
+// ── Recipes ───────────────────────────────────────────────────────────────────
+async function loadRecipes() {
+  const recipes = await fetch('/recipes').then(r => r.json());
+  renderRecipes(recipes);
+}
+
+async function deleteRecipe(id) {
+  if (!confirm('Delete this recipe?')) return;
+  await fetch(`/recipes/${id}`, {method:'DELETE'});
+  loadRecipes();
+}
+
+function renderRecipes(recipes) {
+  const el = document.getElementById('recipes-list');
+  if (!recipes.length) {
+    el.innerHTML = '<div class="empty">No recipes saved yet.<br>Hit "Save as recipe" on any shot to save its settings.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="recipe-grid">${recipes.map(r => `
+    <div class="recipe-card">
+      <div class="recipe-name">${r.name}</div>
+      <div class="recipe-roast">${r.roast}</div>
+      <div class="recipe-metrics">
+        <span class="metric">grind <strong>${r.grind_size}</strong></span>
+        <span class="metric"><strong>${r.dose_g}g</strong>→<strong>${r.yield_g}g</strong></span>
+        <span class="metric"><strong>${r.time_s}s</strong></span>
+      </div>
+      ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
+      <div class="recipe-actions">
+        <button class="btn-sm-action" onclick='prefillFromRecipe(${JSON.stringify(r)})'>Use settings</button>
+        <button class="btn-delete" onclick="deleteRecipe(${r.id})">✕</button>
+      </div>
+    </div>`).join('')}</div>`;
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -357,8 +587,7 @@ function renderStats(stats) {
   document.getElementById('s-total').textContent = stats.total ?? '—';
   document.getElementById('s-rating').textContent = stats.avg_rating ? `${stats.avg_rating}★` : '—';
   document.getElementById('s-time').textContent = stats.avg_time_s ?? '—';
-  const ratio = (stats.avg_dose_g && stats.avg_yield_g)
-    ? `1:${(stats.avg_yield_g / stats.avg_dose_g).toFixed(1)}` : '—';
+  const ratio = (stats.avg_dose_g && stats.avg_yield_g) ? `1:${(stats.avg_yield_g/stats.avg_dose_g).toFixed(1)}` : '—';
   document.getElementById('s-ratio').textContent = ratio;
 }
 

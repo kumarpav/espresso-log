@@ -10,7 +10,7 @@ import os
 import anthropic
 
 from database import engine, get_db, Base
-from models import Shot
+from models import Shot, Recipe, Config
 
 Base.metadata.create_all(bind=engine)
 
@@ -50,7 +50,6 @@ def generate_advice(shot: Shot, prev_shots: list) -> str:
         "over-extracted (too slow)" if shot.time_s > 35 else
         "within ideal range"
     )
-
     history = ""
     if prev_shots:
         history = "\n\nPrevious shots with this same roast (oldest → newest):\n"
@@ -78,17 +77,20 @@ What should I adjust for my next shot?"""
         response = _anthropic.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=350,
-            system=[{
-                "type": "text",
-                "text": COACH_SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"}
-            }],
+            system=[{"type": "text", "text": COACH_SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_msg}],
             extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
         )
         return response.content[0].text
     except Exception:
         return ""
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def get_config(db: Session, key: str, default: str = "") -> str:
+    row = db.query(Config).filter(Config.key == key).first()
+    return row.value if row else default
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -116,7 +118,31 @@ class ShotOut(BaseModel):
     notes: str
     advice: str
     ratio: Optional[float]
+    class Config:
+        from_attributes = True
 
+class RecipeIn(BaseModel):
+    name: str
+    roast: str
+    grind_size: float
+    dose_g: float
+    yield_g: float
+    time_s: int
+    notes: Optional[str] = ""
+    shot_id: Optional[int] = None
+
+class RecipeOut(BaseModel):
+    id: int
+    name: str
+    roast: str
+    grind_size: float
+    dose_g: float
+    yield_g: float
+    time_s: int
+    notes: str
+    created_at: datetime
+    shot_id: Optional[int]
+    ratio: Optional[float]
     class Config:
         from_attributes = True
 
@@ -127,6 +153,9 @@ class RoastSummary(BaseModel):
     best_shot: Optional[ShotOut]
     shots: list[ShotOut]
 
+class ConfigIn(BaseModel):
+    display_name: Optional[str] = None
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -134,6 +163,12 @@ class RoastSummary(BaseModel):
 def root():
     return FileResponse("public/index.html")
 
+@app.get("/profile")
+def profile_page():
+    return FileResponse("public/profile.html")
+
+
+# Shots
 @app.post("/shots", response_model=ShotOut)
 def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
     row = Shot(**shot.model_dump())
@@ -144,13 +179,26 @@ def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
         db.query(Shot)
         .filter(Shot.roast == row.roast, Shot.id != row.id)
         .order_by(Shot.timestamp.desc())
-        .limit(3)
-        .all()
+        .limit(3).all()
     )
     row.advice = generate_advice(row, prev)
     db.commit()
     db.refresh(row)
     return row
+
+@app.get("/shots/chart")
+def chart_data(db: Session = Depends(get_db)):
+    shots = db.query(Shot).order_by(Shot.timestamp.asc()).all()
+    by_roast: dict = {}
+    for s in shots:
+        by_roast.setdefault(s.roast, []).append({
+            "date": s.timestamp.strftime("%b %d"),
+            "rating": s.rating,
+            "grind_size": s.grind_size,
+            "time_s": s.time_s,
+            "id": s.id,
+        })
+    return {"by_roast": by_roast}
 
 @app.get("/shots", response_model=list[ShotOut])
 def list_shots(limit: int = 50, db: Session = Depends(get_db)):
@@ -160,18 +208,43 @@ def list_shots(limit: int = 50, db: Session = Depends(get_db)):
 def get_shot(shot_id: int, db: Session = Depends(get_db)):
     shot = db.query(Shot).filter(Shot.id == shot_id).first()
     if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+        raise HTTPException(404, "Shot not found")
     return shot
 
 @app.delete("/shots/{shot_id}")
 def delete_shot(shot_id: int, db: Session = Depends(get_db)):
     shot = db.query(Shot).filter(Shot.id == shot_id).first()
     if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
+        raise HTTPException(404, "Shot not found")
     db.delete(shot)
     db.commit()
     return {"ok": True}
 
+
+# Recipes
+@app.post("/recipes", response_model=RecipeOut)
+def save_recipe(recipe: RecipeIn, db: Session = Depends(get_db)):
+    row = Recipe(**recipe.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+@app.get("/recipes", response_model=list[RecipeOut])
+def list_recipes(db: Session = Depends(get_db)):
+    return db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+
+@app.delete("/recipes/{recipe_id}")
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(404, "Recipe not found")
+    db.delete(recipe)
+    db.commit()
+    return {"ok": True}
+
+
+# Roasts
 @app.get("/roasts", response_model=list[RoastSummary])
 def list_roasts(db: Session = Depends(get_db)):
     roast_names = (
@@ -182,12 +255,7 @@ def list_roasts(db: Session = Depends(get_db)):
     )
     result = []
     for (roast,) in roast_names:
-        shots = (
-            db.query(Shot)
-            .filter(Shot.roast == roast)
-            .order_by(Shot.timestamp.desc())
-            .all()
-        )
+        shots = db.query(Shot).filter(Shot.roast == roast).order_by(Shot.timestamp.desc()).all()
         avg_rating = sum(s.rating for s in shots) / len(shots)
         best = max(shots, key=lambda s: (s.rating, s.timestamp))
         result.append(RoastSummary(
@@ -199,24 +267,22 @@ def list_roasts(db: Session = Depends(get_db)):
         ))
     return result
 
+
+# Stats
 @app.get("/stats")
 def stats(db: Session = Depends(get_db)):
     total = db.query(func.count(Shot.id)).scalar()
     if total == 0:
         return {"total": 0}
-
     avg_rating = db.query(func.avg(Shot.rating)).scalar()
     avg_time   = db.query(func.avg(Shot.time_s)).scalar()
     avg_dose   = db.query(func.avg(Shot.dose_g)).scalar()
     avg_yield  = db.query(func.avg(Shot.yield_g)).scalar()
-
     best = (
         db.query(Shot)
         .filter(Shot.rating == db.query(func.max(Shot.rating)).scalar())
-        .order_by(Shot.timestamp.desc())
-        .first()
+        .order_by(Shot.timestamp.desc()).first()
     )
-
     return {
         "total": total,
         "avg_rating": round(avg_rating, 2) if avg_rating else None,
@@ -224,4 +290,36 @@ def stats(db: Session = Depends(get_db)):
         "avg_dose_g": round(avg_dose, 1) if avg_dose else None,
         "avg_yield_g": round(avg_yield, 1) if avg_yield else None,
         "best_shot": ShotOut.model_validate(best) if best else None,
+    }
+
+
+# Config / Profile
+@app.patch("/api/config")
+def update_config(body: ConfigIn, db: Session = Depends(get_db)):
+    if body.display_name is not None:
+        row = db.query(Config).filter(Config.key == "display_name").first()
+        if row:
+            row.value = body.display_name
+        else:
+            db.add(Config(key="display_name", value=body.display_name))
+        db.commit()
+    return {"ok": True}
+
+@app.get("/api/profile")
+def api_profile(db: Session = Depends(get_db)):
+    display_name = get_config(db, "display_name", "My Espresso Log")
+    total = db.query(func.count(Shot.id)).scalar()
+    avg_rating = db.query(func.avg(Shot.rating)).scalar()
+    roast_count = db.query(func.count(func.distinct(Shot.roast))).scalar()
+    top_shots = (
+        db.query(Shot).order_by(Shot.rating.desc(), Shot.timestamp.desc()).limit(5).all()
+    )
+    recipes = db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+    return {
+        "display_name": display_name,
+        "total_shots": total,
+        "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        "roasts_tried": roast_count,
+        "top_shots": [ShotOut.model_validate(s) for s in top_shots],
+        "recipes": [RecipeOut.model_validate(r) for r in recipes],
     }
