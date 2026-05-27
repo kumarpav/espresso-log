@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Espresso Log</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #1a1008; min-height: 100vh; color: #f0e6d3; }
+
+  header { background: rgba(0,0,0,0.4); padding: 1rem 1.5rem; display: flex; align-items: baseline; gap: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; color: #c8935a; }
+  header span { font-size: 0.8rem; color: rgba(255,255,255,0.35); }
+
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: calc(100vh - 54px); }
+
+  /* ── Log form ── */
+  .form-panel { background: rgba(0,0,0,0.25); border-right: 1px solid rgba(255,255,255,0.08); padding: 1.5rem; overflow-y: auto; }
+  .form-panel h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.4); margin-bottom: 1.25rem; }
+  .field { margin-bottom: 1rem; }
+  .field label { display: block; font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem; font-weight: 500; }
+  .field input, .field textarea { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 0.55rem 0.75rem; color: #f0e6d3; font-size: 0.9rem; outline: none; font-family: inherit; }
+  .field input:focus, .field textarea:focus { border-color: #c8935a; }
+  .field textarea { resize: vertical; min-height: 64px; }
+  .field input::placeholder, .field textarea::placeholder { color: rgba(255,255,255,0.2); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .rating-row { display: flex; gap: 0.4rem; }
+  .star { font-size: 1.4rem; cursor: pointer; opacity: 0.3; transition: opacity 0.1s; }
+  .star.on { opacity: 1; }
+  .btn-log { width: 100%; background: #c8935a; color: #1a1008; border: none; border-radius: 10px; padding: 0.8rem; font-size: 0.95rem; font-weight: 800; cursor: pointer; margin-top: 0.5rem; transition: opacity 0.15s; }
+  .btn-log:hover { opacity: 0.88; }
+  .form-msg { text-align: center; font-size: 0.8rem; color: #c8935a; min-height: 1.2rem; margin-top: 0.4rem; }
+
+  /* ── Stats bar ── */
+  .main-panel { display: flex; flex-direction: column; overflow: hidden; }
+  .stats-bar { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .stat { flex: 1; padding: 0.9rem 1rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
+  .stat:last-child { border-right: none; }
+  .stat-val { font-size: 1.3rem; font-weight: 800; color: #c8935a; line-height: 1; }
+  .stat-label { font-size: 0.65rem; color: rgba(255,255,255,0.35); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Shot list ── */
+  .shots-area { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+  .shots-area h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.35); margin-bottom: 0.85rem; }
+  .shot-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.65rem; display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 1rem; }
+  .shot-top { display: flex; align-items: baseline; gap: 0.6rem; grid-column: 1; }
+  .shot-roast { font-weight: 700; font-size: 0.95rem; }
+  .shot-time { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
+  .shot-stars { grid-column: 2; grid-row: 1; color: #c8935a; font-size: 0.78rem; align-self: center; }
+  .shot-metrics { grid-column: 1 / -1; display: flex; gap: 1rem; margin-top: 0.3rem; flex-wrap: wrap; }
+  .metric { font-size: 0.78rem; color: rgba(255,255,255,0.5); }
+  .metric strong { color: #f0e6d3; font-weight: 600; }
+  .shot-notes { grid-column: 1 / -1; font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 0.35rem; font-style: italic; }
+  .shot-delete { grid-column: 2; grid-row: 2 / 4; align-self: end; background: none; border: none; color: rgba(255,255,255,0.18); cursor: pointer; font-size: 0.78rem; padding: 0; }
+  .shot-delete:hover { color: #e74c3c; }
+  .empty { text-align: center; color: rgba(255,255,255,0.25); font-size: 0.88rem; padding: 3rem 1rem; }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+    .form-panel { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .stats-bar { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>☕ Espresso Log</h1>
+  <span>dial-in journal</span>
+</header>
+
+<div class="layout">
+
+  <!-- Log form -->
+  <div class="form-panel">
+    <h2>Log a shot</h2>
+    <div class="field">
+      <label>Roast / Bean</label>
+      <input id="f-roast" type="text" placeholder="e.g. Ethiopia Yirgacheffe">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Dose (g)</label>
+        <input id="f-dose" type="number" step="0.1" placeholder="18.0">
+      </div>
+      <div class="field">
+        <label>Yield (g)</label>
+        <input id="f-yield" type="number" step="0.1" placeholder="36.0">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Time (s)</label>
+        <input id="f-time" type="number" placeholder="28">
+      </div>
+      <div class="field">
+        <label>Grind size</label>
+        <input id="f-grind" type="number" step="0.5" placeholder="12.0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Rating</label>
+      <div class="rating-row" id="star-row">
+        <span class="star" data-v="1">★</span>
+        <span class="star" data-v="2">★</span>
+        <span class="star" data-v="3">★</span>
+        <span class="star" data-v="4">★</span>
+        <span class="star" data-v="5">★</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Tasting notes</label>
+      <textarea id="f-tasting" placeholder="Bright citrus, chocolate finish..."></textarea>
+    </div>
+    <div class="field">
+      <label>Other notes</label>
+      <textarea id="f-notes" placeholder="Puck prep, temperature, anything else..."></textarea>
+    </div>
+    <button class="btn-log" onclick="logShot()">Log shot</button>
+    <div class="form-msg" id="form-msg"></div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="main-panel">
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">Shots</div></div>
+      <div class="stat"><div class="stat-val" id="s-rating">—</div><div class="stat-label">Avg rating</div></div>
+      <div class="stat"><div class="stat-val" id="s-time">—</div><div class="stat-label">Avg time (s)</div></div>
+      <div class="stat"><div class="stat-val" id="s-ratio">—</div><div class="stat-label">Avg ratio</div></div>
+    </div>
+    <div class="shots-area">
+      <h2>Recent shots</h2>
+      <div id="shots-list"><div class="empty">No shots logged yet. Pull one!</div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let selectedRating = 0;
+
+// ── Star rating ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.star').forEach(star => {
+  star.addEventListener('click', () => {
+    selectedRating = parseInt(star.dataset.v);
+    document.querySelectorAll('.star').forEach(s => {
+      s.classList.toggle('on', parseInt(s.dataset.v) <= selectedRating);
+    });
+  });
+});
+
+// ── Log shot ──────────────────────────────────────────────────────────────────
+async function logShot() {
+  const roast  = document.getElementById('f-roast').value.trim();
+  const dose   = parseFloat(document.getElementById('f-dose').value);
+  const yield_ = parseFloat(document.getElementById('f-yield').value);
+  const time   = parseInt(document.getElementById('f-time').value);
+  const grind  = parseFloat(document.getElementById('f-grind').value);
+
+  if (!roast || isNaN(dose) || isNaN(yield_) || isNaN(time) || isNaN(grind) || !selectedRating) {
+    setMsg('Fill in all fields and pick a rating.'); return;
+  }
+
+  const res = await fetch('/shots', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      roast, dose_g: dose, yield_g: yield_, time_s: time, grind_size: grind,
+      rating: selectedRating,
+      tasting_notes: document.getElementById('f-tasting').value.trim(),
+      notes: document.getElementById('f-notes').value.trim(),
+    })
+  });
+
+  if (res.ok) {
+    setMsg('Shot logged!');
+    clearForm();
+    load();
+    setTimeout(() => setMsg(''), 3000);
+  } else {
+    setMsg('Error logging shot.');
+  }
+}
+
+function clearForm() {
+  ['f-roast','f-dose','f-yield','f-time','f-grind','f-tasting','f-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  selectedRating = 0;
+  document.querySelectorAll('.star').forEach(s => s.classList.remove('on'));
+}
+
+function setMsg(msg) { document.getElementById('form-msg').textContent = msg; }
+
+// ── Delete shot ───────────────────────────────────────────────────────────────
+async function deleteShot(id) {
+  if (!confirm('Delete this shot?')) return;
+  await fetch(`/shots/${id}`, { method: 'DELETE' });
+  load();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function stars(n) { return '★'.repeat(n) + '☆'.repeat(5 - n); }
+
+function timeAgo(ts) {
+  const diff = (Date.now() - new Date(ts + 'Z').getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  return `${Math.floor(diff/86400)}d ago`;
+}
+
+function renderShots(shots) {
+  const el = document.getElementById('shots-list');
+  if (!shots.length) { el.innerHTML = '<div class="empty">No shots logged yet. Pull one!</div>'; return; }
+  el.innerHTML = shots.map(s => `
+    <div class="shot-card">
+      <div class="shot-top">
+        <span class="shot-roast">${s.roast}</span>
+        <span class="shot-time">${timeAgo(s.timestamp)}</span>
+      </div>
+      <div class="shot-stars">${stars(s.rating)}</div>
+      <div class="shot-metrics">
+        <span class="metric"><strong>${s.dose_g}g</strong> in</span>
+        <span class="metric"><strong>${s.yield_g}g</strong> out</span>
+        <span class="metric"><strong>${s.time_s}s</strong></span>
+        <span class="metric">grind <strong>${s.grind_size}</strong></span>
+        <span class="metric">ratio <strong>1:${s.ratio}</strong></span>
+      </div>
+      ${s.tasting_notes ? `<div class="shot-notes">${s.tasting_notes}</div>` : ''}
+      <button class="shot-delete" onclick="deleteShot(${s.id})">✕ delete</button>
+    </div>
+  `).join('');
+}
+
+function renderStats(stats) {
+  document.getElementById('s-total').textContent = stats.total ?? '—';
+  document.getElementById('s-rating').textContent = stats.avg_rating ? `${stats.avg_rating}★` : '—';
+  document.getElementById('s-time').textContent = stats.avg_time_s ?? '—';
+  const ratio = (stats.avg_dose_g && stats.avg_yield_g)
+    ? `1:${(stats.avg_yield_g / stats.avg_dose_g).toFixed(1)}`
+    : '—';
+  document.getElementById('s-ratio').textContent = ratio;
+}
+
+async function load() {
+  const [shots, stats] = await Promise.all([
+    fetch('/shots').then(r => r.json()),
+    fetch('/stats').then(r => r.json()),
+  ]);
+  renderShots(shots);
+  renderStats(stats);
+}
+
+load();
+</script>
+</body>
+</html>
