@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Espresso Log</title>
+<title>Espresso Coach</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #1a1008; min-height: 100vh; color: #f0e6d3; }
@@ -12,61 +12,76 @@
   header h1 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; color: #c8935a; }
   header span { font-size: 0.8rem; color: rgba(255,255,255,0.35); }
 
-  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: calc(100vh - 54px); }
+  .layout { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 54px); }
 
   /* ── Log form ── */
   .form-panel { background: rgba(0,0,0,0.25); border-right: 1px solid rgba(255,255,255,0.08); padding: 1.5rem; overflow-y: auto; }
-  .form-panel h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.4); margin-bottom: 1.25rem; }
+  .form-panel h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.35); margin-bottom: 1.25rem; }
   .field { margin-bottom: 1rem; }
   .field label { display: block; font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem; font-weight: 500; }
   .field input, .field textarea { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 0.55rem 0.75rem; color: #f0e6d3; font-size: 0.9rem; outline: none; font-family: inherit; }
   .field input:focus, .field textarea:focus { border-color: #c8935a; }
   .field textarea { resize: vertical; min-height: 64px; }
   .field input::placeholder, .field textarea::placeholder { color: rgba(255,255,255,0.2); }
+  .field .hint { font-size: 0.7rem; color: rgba(255,255,255,0.28); margin-top: 0.25rem; }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   .rating-row { display: flex; gap: 0.4rem; }
-  .star { font-size: 1.4rem; cursor: pointer; opacity: 0.3; transition: opacity 0.1s; }
+  .star { font-size: 1.4rem; cursor: pointer; opacity: 0.25; transition: opacity 0.1s; }
   .star.on { opacity: 1; }
-  .btn-log { width: 100%; background: #c8935a; color: #1a1008; border: none; border-radius: 10px; padding: 0.8rem; font-size: 0.95rem; font-weight: 800; cursor: pointer; margin-top: 0.5rem; transition: opacity 0.15s; }
+  .btn-log { width: 100%; background: #c8935a; color: #1a1008; border: none; border-radius: 10px; padding: 0.8rem; font-size: 0.95rem; font-weight: 800; cursor: pointer; margin-top: 0.5rem; transition: opacity 0.15s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
   .btn-log:hover { opacity: 0.88; }
-  .form-msg { text-align: center; font-size: 0.8rem; color: #c8935a; min-height: 1.2rem; margin-top: 0.4rem; }
+  .btn-log:disabled { opacity: 0.45; cursor: default; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(26,16,8,0.3); border-top-color: #1a1008; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+  .btn-log.loading .spinner { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Advice panel (shown after logging) ── */
+  .advice-panel { background: rgba(200,147,90,0.1); border: 1px solid rgba(200,147,90,0.3); border-radius: 12px; padding: 1rem 1.1rem; margin-top: 1rem; display: none; }
+  .advice-panel.show { display: block; }
+  .advice-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .advice-header span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #c8935a; font-weight: 700; }
+  .advice-text { font-size: 0.85rem; color: rgba(255,255,255,0.82); line-height: 1.6; white-space: pre-wrap; }
 
   /* ── Stats bar ── */
   .main-panel { display: flex; flex-direction: column; overflow: hidden; }
-  .stats-bar { display: flex; gap: 0; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .stats-bar { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
   .stat { flex: 1; padding: 0.9rem 1rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
   .stat:last-child { border-right: none; }
   .stat-val { font-size: 1.3rem; font-weight: 800; color: #c8935a; line-height: 1; }
-  .stat-label { font-size: 0.65rem; color: rgba(255,255,255,0.35); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-label { font-size: 0.62rem; color: rgba(255,255,255,0.32); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.5px; }
 
   /* ── Shot list ── */
-  .shots-area { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
-  .shots-area h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.35); margin-bottom: 0.85rem; }
-  .shot-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.65rem; display: grid; grid-template-columns: 1fr auto; gap: 0.25rem 1rem; }
-  .shot-top { display: flex; align-items: baseline; gap: 0.6rem; grid-column: 1; }
+  .shots-area { flex: 1; overflow-y: auto; padding: 1.1rem 1.25rem; }
+  .shots-area h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,0.3); margin-bottom: 0.85rem; }
+  .shot-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; }
+  .shot-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem; }
   .shot-roast { font-weight: 700; font-size: 0.95rem; }
-  .shot-time { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
-  .shot-stars { grid-column: 2; grid-row: 1; color: #c8935a; font-size: 0.78rem; align-self: center; }
-  .shot-metrics { grid-column: 1 / -1; display: flex; gap: 1rem; margin-top: 0.3rem; flex-wrap: wrap; }
-  .metric { font-size: 0.78rem; color: rgba(255,255,255,0.5); }
+  .shot-meta { display: flex; align-items: center; gap: 0.6rem; }
+  .shot-stars { color: #c8935a; font-size: 0.78rem; }
+  .shot-age { font-size: 0.7rem; color: rgba(255,255,255,0.28); }
+  .shot-metrics { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .metric { font-size: 0.78rem; color: rgba(255,255,255,0.45); }
   .metric strong { color: #f0e6d3; font-weight: 600; }
-  .shot-notes { grid-column: 1 / -1; font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 0.35rem; font-style: italic; }
-  .shot-delete { grid-column: 2; grid-row: 2 / 4; align-self: end; background: none; border: none; color: rgba(255,255,255,0.18); cursor: pointer; font-size: 0.78rem; padding: 0; }
-  .shot-delete:hover { color: #e74c3c; }
-  .empty { text-align: center; color: rgba(255,255,255,0.25); font-size: 0.88rem; padding: 3rem 1rem; }
+  .shot-tasting { font-size: 0.8rem; color: rgba(255,255,255,0.4); font-style: italic; margin-bottom: 0.5rem; }
+  .shot-advice { background: rgba(200,147,90,0.08); border-left: 2px solid #c8935a; border-radius: 0 6px 6px 0; padding: 0.6rem 0.8rem; margin-top: 0.5rem; }
+  .shot-advice-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.8px; color: #c8935a; font-weight: 700; margin-bottom: 0.3rem; }
+  .shot-advice-text { font-size: 0.8rem; color: rgba(255,255,255,0.72); line-height: 1.55; white-space: pre-wrap; }
+  .shot-footer { display: flex; justify-content: flex-end; margin-top: 0.5rem; }
+  .btn-delete { background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 0.75rem; }
+  .btn-delete:hover { color: #e74c3c; }
+  .empty { text-align: center; color: rgba(255,255,255,0.22); font-size: 0.88rem; padding: 3rem 1rem; line-height: 1.7; }
 
-  @media (max-width: 700px) {
+  @media (max-width: 720px) {
     .layout { grid-template-columns: 1fr; }
     .form-panel { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .stats-bar { flex-wrap: wrap; }
   }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>☕ Espresso Log</h1>
-  <span>dial-in journal</span>
+  <h1>☕ Espresso Coach</h1>
+  <span>log your shot · get better next time</span>
 </header>
 
 <div class="layout">
@@ -74,28 +89,31 @@
   <!-- Log form -->
   <div class="form-panel">
     <h2>Log a shot</h2>
+
     <div class="field">
       <label>Roast / Bean</label>
       <input id="f-roast" type="text" placeholder="e.g. Ethiopia Yirgacheffe">
     </div>
     <div class="row2">
       <div class="field">
-        <label>Dose (g)</label>
+        <label>Dose (g in)</label>
         <input id="f-dose" type="number" step="0.1" placeholder="18.0">
       </div>
       <div class="field">
-        <label>Yield (g)</label>
+        <label>Yield (g out)</label>
         <input id="f-yield" type="number" step="0.1" placeholder="36.0">
       </div>
     </div>
     <div class="row2">
       <div class="field">
-        <label>Time (s)</label>
+        <label>Time (seconds)</label>
         <input id="f-time" type="number" placeholder="28">
+        <div class="hint">Aim for 25–35s</div>
       </div>
       <div class="field">
         <label>Grind size</label>
         <input id="f-grind" type="number" step="0.5" placeholder="12.0">
+        <div class="hint">Lower = finer</div>
       </div>
     </div>
     <div class="field">
@@ -110,27 +128,38 @@
     </div>
     <div class="field">
       <label>Tasting notes</label>
-      <textarea id="f-tasting" placeholder="Bright citrus, chocolate finish..."></textarea>
+      <textarea id="f-tasting" placeholder="Sour, bitter, weak, chocolatey, bright citrus... be specific, it helps!"></textarea>
     </div>
     <div class="field">
-      <label>Other notes</label>
-      <textarea id="f-notes" placeholder="Puck prep, temperature, anything else..."></textarea>
+      <label>Other observations</label>
+      <textarea id="f-notes" placeholder="Puck prep, channelling, temperature, anything unusual..."></textarea>
     </div>
-    <button class="btn-log" onclick="logShot()">Log shot</button>
-    <div class="form-msg" id="form-msg"></div>
+
+    <button class="btn-log" id="log-btn" onclick="logShot()">
+      <div class="spinner" id="spinner"></div>
+      <span id="log-btn-text">Log shot &amp; get advice</span>
+    </button>
+
+    <!-- Advice appears here after logging -->
+    <div class="advice-panel" id="advice-panel">
+      <div class="advice-header">
+        <span>Coach says</span>
+      </div>
+      <div class="advice-text" id="advice-text"></div>
+    </div>
   </div>
 
   <!-- Right panel -->
   <div class="main-panel">
-    <div class="stats-bar" id="stats-bar">
-      <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">Shots</div></div>
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">Shots logged</div></div>
       <div class="stat"><div class="stat-val" id="s-rating">—</div><div class="stat-label">Avg rating</div></div>
       <div class="stat"><div class="stat-val" id="s-time">—</div><div class="stat-label">Avg time (s)</div></div>
       <div class="stat"><div class="stat-val" id="s-ratio">—</div><div class="stat-label">Avg ratio</div></div>
     </div>
     <div class="shots-area">
-      <h2>Recent shots</h2>
-      <div id="shots-list"><div class="empty">No shots logged yet. Pull one!</div></div>
+      <h2>Shot history</h2>
+      <div id="shots-list"><div class="empty">No shots yet.<br>Log your first pull and get coaching advice!</div></div>
     </div>
   </div>
 
@@ -158,8 +187,11 @@ async function logShot() {
   const grind  = parseFloat(document.getElementById('f-grind').value);
 
   if (!roast || isNaN(dose) || isNaN(yield_) || isNaN(time) || isNaN(grind) || !selectedRating) {
-    setMsg('Fill in all fields and pick a rating.'); return;
+    alert('Please fill in all fields and pick a rating.'); return;
   }
+
+  setLoading(true);
+  document.getElementById('advice-panel').classList.remove('show');
 
   const res = await fetch('/shots', {
     method: 'POST',
@@ -172,14 +204,27 @@ async function logShot() {
     })
   });
 
+  setLoading(false);
+
   if (res.ok) {
-    setMsg('Shot logged!');
+    const shot = await res.json();
+    if (shot.advice) {
+      document.getElementById('advice-text').textContent = shot.advice;
+      document.getElementById('advice-panel').classList.add('show');
+    }
     clearForm();
     load();
-    setTimeout(() => setMsg(''), 3000);
   } else {
-    setMsg('Error logging shot.');
+    alert('Error logging shot — check the server.');
   }
+}
+
+function setLoading(on) {
+  const btn = document.getElementById('log-btn');
+  btn.disabled = on;
+  btn.classList.toggle('loading', on);
+  document.getElementById('log-btn-text').textContent = on ? 'Analysing your shot…' : 'Log shot & get advice';
+  document.getElementById('spinner').style.display = on ? 'block' : 'none';
 }
 
 function clearForm() {
@@ -190,9 +235,6 @@ function clearForm() {
   document.querySelectorAll('.star').forEach(s => s.classList.remove('on'));
 }
 
-function setMsg(msg) { document.getElementById('form-msg').textContent = msg; }
-
-// ── Delete shot ───────────────────────────────────────────────────────────────
 async function deleteShot(id) {
   if (!confirm('Delete this shot?')) return;
   await fetch(`/shots/${id}`, { method: 'DELETE' });
@@ -200,7 +242,7 @@ async function deleteShot(id) {
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
-function stars(n) { return '★'.repeat(n) + '☆'.repeat(5 - n); }
+const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 function timeAgo(ts) {
   const diff = (Date.now() - new Date(ts + 'Z').getTime()) / 1000;
@@ -212,14 +254,19 @@ function timeAgo(ts) {
 
 function renderShots(shots) {
   const el = document.getElementById('shots-list');
-  if (!shots.length) { el.innerHTML = '<div class="empty">No shots logged yet. Pull one!</div>'; return; }
+  if (!shots.length) {
+    el.innerHTML = '<div class="empty">No shots yet.<br>Log your first pull and get coaching advice!</div>';
+    return;
+  }
   el.innerHTML = shots.map(s => `
     <div class="shot-card">
-      <div class="shot-top">
+      <div class="shot-header">
         <span class="shot-roast">${s.roast}</span>
-        <span class="shot-time">${timeAgo(s.timestamp)}</span>
+        <div class="shot-meta">
+          <span class="shot-stars">${stars(s.rating)}</span>
+          <span class="shot-age">${timeAgo(s.timestamp)}</span>
+        </div>
       </div>
-      <div class="shot-stars">${stars(s.rating)}</div>
       <div class="shot-metrics">
         <span class="metric"><strong>${s.dose_g}g</strong> in</span>
         <span class="metric"><strong>${s.yield_g}g</strong> out</span>
@@ -227,8 +274,15 @@ function renderShots(shots) {
         <span class="metric">grind <strong>${s.grind_size}</strong></span>
         <span class="metric">ratio <strong>1:${s.ratio}</strong></span>
       </div>
-      ${s.tasting_notes ? `<div class="shot-notes">${s.tasting_notes}</div>` : ''}
-      <button class="shot-delete" onclick="deleteShot(${s.id})">✕ delete</button>
+      ${s.tasting_notes ? `<div class="shot-tasting">"${s.tasting_notes}"</div>` : ''}
+      ${s.advice ? `
+        <div class="shot-advice">
+          <div class="shot-advice-label">Coach says</div>
+          <div class="shot-advice-text">${s.advice}</div>
+        </div>` : ''}
+      <div class="shot-footer">
+        <button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button>
+      </div>
     </div>
   `).join('');
 }

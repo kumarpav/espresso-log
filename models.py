@@ -15,6 +15,7 @@ class Shot(Base):
     rating      = Column(Integer) # 1–5
     tasting_notes = Column(Text, default="")
     notes       = Column(Text, default="")
+    advice      = Column(Text, default="")
 
     @property
     def ratio(self):

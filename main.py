@@ -7,14 +7,73 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import os
+import anthropic
 
 from database import engine, get_db, Base
 from models import Shot
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Espresso Log")
+app = FastAPI(title="Espresso Coach")
 app.mount("/static", StaticFiles(directory="public"), name="static")
+
+_anthropic = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+COACH_SYSTEM_PROMPT = """\
+You are a friendly, encouraging espresso coach helping new home baristas pull better shots.
+You understand the key variables: grind size, dose, yield, extraction time, and how they
+interact. Your job is to read a shot log and give clear, specific, beginner-friendly advice
+on what to adjust next time.
+
+Key espresso principles to draw on:
+- Ideal extraction time: 25–35 seconds. Too fast = under-extracted (sour, thin). Too slow = over-extracted (bitter, harsh).
+- Ideal ratio: 1:2 to 1:2.5 for classic espresso. Higher ratio = lighter/more acidic. Lower = stronger/more bitter.
+- Grind finer → slower flow → more body, more risk of bitterness.
+- Grind coarser → faster flow → brighter/sourer, less body.
+- Sour or acidic taste → usually under-extracted → grind finer, or reduce yield.
+- Bitter or harsh taste → usually over-extracted → grind coarser, or increase yield.
+- Weak or watery → reduce yield (stop pulling earlier).
+- Astringent or dry → grind coarser, check puck prep.
+
+Always give 2–3 numbered, specific adjustments. Mention the direction and a rough magnitude
+where possible (e.g. "try going 0.5 clicks finer"). Explain briefly why each change helps.
+End with one sentence of encouragement. Keep total response under 180 words."""
+
+
+def generate_advice(shot: Shot) -> str:
+    ratio = f"1:{shot.ratio}" if shot.ratio else "unknown"
+    time_note = (
+        "under-extracted (too fast)" if shot.time_s < 25 else
+        "over-extracted (too slow)" if shot.time_s > 35 else
+        "within ideal range"
+    )
+
+    user_msg = f"""Shot log:
+- Roast: {shot.roast}
+- Dose: {shot.dose_g}g in → {shot.yield_g}g out (ratio {ratio})
+- Extraction time: {shot.time_s}s ({time_note})
+- Grind size: {shot.grind_size}
+- Rating: {shot.rating}/5
+- Tasting notes: {shot.tasting_notes or 'none provided'}
+- Additional notes: {shot.notes or 'none'}
+
+What should I adjust for my next shot?"""
+
+    try:
+        response = _anthropic.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            system=[{
+                "type": "text",
+                "text": COACH_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"}
+            }],
+            messages=[{"role": "user", "content": user_msg}],
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}
+        )
+        return response.content[0].text
+    except Exception:
+        return ""
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -40,6 +99,7 @@ class ShotOut(BaseModel):
     rating: int
     tasting_notes: str
     notes: str
+    advice: str
     ratio: Optional[float]
 
     class Config:
@@ -56,6 +116,9 @@ def root():
 def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
     row = Shot(**shot.model_dump())
     db.add(row)
+    db.commit()
+    db.refresh(row)
+    row.advice = generate_advice(row)
     db.commit()
     db.refresh(row)
     return row
