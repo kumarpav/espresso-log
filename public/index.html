@@ -494,7 +494,12 @@ async function deleteShot(id) {
 }
 
 // ── Recipe modal ──────────────────────────────────────────────────────────────
-function openRecipeModal(shot) {
+const _shotCache = {};
+const _recipeCache = {};
+
+function openRecipeModal(shotId) {
+  const shot = _shotCache[shotId];
+  if (!shot) return;
   pendingRecipeShot = shot;
   document.getElementById('recipe-name-input').value = '';
   document.getElementById('recipe-notes-input').value = '';
@@ -552,7 +557,9 @@ async function saveSettings() {
 }
 
 // ── Prefill from recipe ───────────────────────────────────────────────────────
-function prefillFromRecipe(r) {
+function prefillFromRecipe(recipeId) {
+  const r = _recipeCache[recipeId];
+  if (!r) return;
   document.getElementById('f-roast').value = r.roast;
   document.getElementById('f-dose').value = r.dose_g;
   document.getElementById('f-yield').value = r.yield_g;
@@ -573,6 +580,7 @@ function timeAgo(ts) {
 }
 
 function shotCardHtml(s, showRoast = true) {
+  _shotCache[s.id] = s;
   return `<div class="shot-card">
     <div class="shot-header">
       ${showRoast ? `<span class="shot-roast">${s.roast}</span>` : `<span style="font-size:0.8rem;color:rgba(255,255,255,0.35)">${timeAgo(s.timestamp)}</span>`}
@@ -593,7 +601,7 @@ function shotCardHtml(s, showRoast = true) {
     <div class="shot-footer">
       ${isDemoMode
         ? `<span class="demo-label">sample data — log your own shots to start tracking</span>`
-        : `<button class="btn-sm-action" onclick='openRecipeModal(${JSON.stringify(s)})'>Save as recipe</button>
+        : `<button class="btn-sm-action" onclick="openRecipeModal('${s.id}')">Save as recipe</button>
            <button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button>`
       }
     </div>
@@ -755,6 +763,7 @@ function renderRecipes(recipes) {
     el.innerHTML = '<div class="empty">No recipes saved yet.<br>Hit "Save as recipe" on any shot to save its settings.</div>';
     return;
   }
+  recipes.forEach(r => { _recipeCache[r.id] = r; });
   el.innerHTML = `<div class="recipe-grid">${recipes.map(r => `
     <div class="recipe-card">
       <div class="recipe-name">${r.name}</div>
@@ -766,7 +775,7 @@ function renderRecipes(recipes) {
       </div>
       ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
       <div class="recipe-actions">
-        <button class="btn-sm-action" onclick='prefillFromRecipe(${JSON.stringify(r)})'>Use settings</button>
+        <button class="btn-sm-action" onclick="prefillFromRecipe('${r.id}')">Use settings</button>
         ${isDemoMode ? '' : `<button class="btn-delete" onclick="deleteRecipe(${r.id})">✕</button>`}
       </div>
     </div>`).join('')}</div>`;
