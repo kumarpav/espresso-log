@@ -1,8 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -10,9 +10,24 @@ import os
 import anthropic
 
 from database import engine, get_db, Base
-from models import Shot, Recipe, Config
+from models import Shot, Recipe, UserConfig
 
 Base.metadata.create_all(bind=engine)
+
+# Add token column to existing tables that predate this field
+def _run_migrations():
+    with engine.connect() as conn:
+        for stmt in [
+            "ALTER TABLE shots ADD COLUMN token VARCHAR(64) DEFAULT ''",
+            "ALTER TABLE recipes ADD COLUMN token VARCHAR(64) DEFAULT ''",
+        ]:
+            try:
+                conn.execute(text(stmt))
+            except Exception:
+                pass
+        conn.commit()
+
+_run_migrations()
 
 app = FastAPI(title="Espresso Coach")
 app.mount("/static", StaticFiles(directory="public"), name="static")
@@ -88,8 +103,11 @@ What should I adjust for my next shot?"""
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def get_config(db: Session, key: str, default: str = "") -> str:
-    row = db.query(Config).filter(Config.key == key).first()
+def get_token(x_user_token: str = Header(default="")) -> str:
+    return x_user_token
+
+def get_config(db: Session, token: str, key: str, default: str = "") -> str:
+    row = db.query(UserConfig).filter(UserConfig.token == token, UserConfig.key == key).first()
     return row.value if row else default
 
 
@@ -170,14 +188,14 @@ def profile_page():
 
 # Shots
 @app.post("/shots", response_model=ShotOut)
-def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
-    row = Shot(**shot.model_dump())
+def log_shot(shot: ShotIn, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    row = Shot(**shot.model_dump(), token=token)
     db.add(row)
     db.commit()
     db.refresh(row)
     prev = (
         db.query(Shot)
-        .filter(Shot.roast == row.roast, Shot.id != row.id)
+        .filter(Shot.token == token, Shot.roast == row.roast, Shot.id != row.id)
         .order_by(Shot.timestamp.desc())
         .limit(3).all()
     )
@@ -187,8 +205,8 @@ def log_shot(shot: ShotIn, db: Session = Depends(get_db)):
     return row
 
 @app.get("/shots/chart")
-def chart_data(db: Session = Depends(get_db)):
-    shots = db.query(Shot).order_by(Shot.timestamp.asc()).all()
+def chart_data(db: Session = Depends(get_db), token: str = Depends(get_token)):
+    shots = db.query(Shot).filter(Shot.token == token).order_by(Shot.timestamp.asc()).all()
     by_roast: dict = {}
     for s in shots:
         by_roast.setdefault(s.roast, []).append({
@@ -201,19 +219,19 @@ def chart_data(db: Session = Depends(get_db)):
     return {"by_roast": by_roast}
 
 @app.get("/shots", response_model=list[ShotOut])
-def list_shots(limit: int = 50, db: Session = Depends(get_db)):
-    return db.query(Shot).order_by(Shot.timestamp.desc()).limit(limit).all()
+def list_shots(limit: int = 50, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    return db.query(Shot).filter(Shot.token == token).order_by(Shot.timestamp.desc()).limit(limit).all()
 
 @app.get("/shots/{shot_id}", response_model=ShotOut)
-def get_shot(shot_id: int, db: Session = Depends(get_db)):
-    shot = db.query(Shot).filter(Shot.id == shot_id).first()
+def get_shot(shot_id: int, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    shot = db.query(Shot).filter(Shot.id == shot_id, Shot.token == token).first()
     if not shot:
         raise HTTPException(404, "Shot not found")
     return shot
 
 @app.delete("/shots/{shot_id}")
-def delete_shot(shot_id: int, db: Session = Depends(get_db)):
-    shot = db.query(Shot).filter(Shot.id == shot_id).first()
+def delete_shot(shot_id: int, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    shot = db.query(Shot).filter(Shot.id == shot_id, Shot.token == token).first()
     if not shot:
         raise HTTPException(404, "Shot not found")
     db.delete(shot)
@@ -223,20 +241,20 @@ def delete_shot(shot_id: int, db: Session = Depends(get_db)):
 
 # Recipes
 @app.post("/recipes", response_model=RecipeOut)
-def save_recipe(recipe: RecipeIn, db: Session = Depends(get_db)):
-    row = Recipe(**recipe.model_dump())
+def save_recipe(recipe: RecipeIn, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    row = Recipe(**recipe.model_dump(), token=token)
     db.add(row)
     db.commit()
     db.refresh(row)
     return row
 
 @app.get("/recipes", response_model=list[RecipeOut])
-def list_recipes(db: Session = Depends(get_db)):
-    return db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+def list_recipes(db: Session = Depends(get_db), token: str = Depends(get_token)):
+    return db.query(Recipe).filter(Recipe.token == token).order_by(Recipe.created_at.desc()).all()
 
 @app.delete("/recipes/{recipe_id}")
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db), token: str = Depends(get_token)):
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id, Recipe.token == token).first()
     if not recipe:
         raise HTTPException(404, "Recipe not found")
     db.delete(recipe)
@@ -246,16 +264,17 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
 
 # Roasts
 @app.get("/roasts", response_model=list[RoastSummary])
-def list_roasts(db: Session = Depends(get_db)):
+def list_roasts(db: Session = Depends(get_db), token: str = Depends(get_token)):
     roast_names = (
         db.query(Shot.roast)
+        .filter(Shot.token == token)
         .group_by(Shot.roast)
         .order_by(func.max(Shot.timestamp).desc())
         .all()
     )
     result = []
     for (roast,) in roast_names:
-        shots = db.query(Shot).filter(Shot.roast == roast).order_by(Shot.timestamp.desc()).all()
+        shots = db.query(Shot).filter(Shot.token == token, Shot.roast == roast).order_by(Shot.timestamp.desc()).all()
         avg_rating = sum(s.rating for s in shots) / len(shots)
         best = max(shots, key=lambda s: (s.rating, s.timestamp))
         result.append(RoastSummary(
@@ -270,17 +289,18 @@ def list_roasts(db: Session = Depends(get_db)):
 
 # Stats
 @app.get("/stats")
-def stats(db: Session = Depends(get_db)):
-    total = db.query(func.count(Shot.id)).scalar()
+def stats(db: Session = Depends(get_db), token: str = Depends(get_token)):
+    total = db.query(func.count(Shot.id)).filter(Shot.token == token).scalar()
     if total == 0:
         return {"total": 0}
-    avg_rating = db.query(func.avg(Shot.rating)).scalar()
-    avg_time   = db.query(func.avg(Shot.time_s)).scalar()
-    avg_dose   = db.query(func.avg(Shot.dose_g)).scalar()
-    avg_yield  = db.query(func.avg(Shot.yield_g)).scalar()
+    avg_rating = db.query(func.avg(Shot.rating)).filter(Shot.token == token).scalar()
+    avg_time   = db.query(func.avg(Shot.time_s)).filter(Shot.token == token).scalar()
+    avg_dose   = db.query(func.avg(Shot.dose_g)).filter(Shot.token == token).scalar()
+    avg_yield  = db.query(func.avg(Shot.yield_g)).filter(Shot.token == token).scalar()
+    max_rating = db.query(func.max(Shot.rating)).filter(Shot.token == token).scalar()
     best = (
         db.query(Shot)
-        .filter(Shot.rating == db.query(func.max(Shot.rating)).scalar())
+        .filter(Shot.token == token, Shot.rating == max_rating)
         .order_by(Shot.timestamp.desc()).first()
     )
     return {
@@ -295,26 +315,27 @@ def stats(db: Session = Depends(get_db)):
 
 # Config / Profile
 @app.patch("/api/config")
-def update_config(body: ConfigIn, db: Session = Depends(get_db)):
+def update_config(body: ConfigIn, db: Session = Depends(get_db), token: str = Depends(get_token)):
     if body.display_name is not None:
-        row = db.query(Config).filter(Config.key == "display_name").first()
+        row = db.query(UserConfig).filter(UserConfig.token == token, UserConfig.key == "display_name").first()
         if row:
             row.value = body.display_name
         else:
-            db.add(Config(key="display_name", value=body.display_name))
+            db.add(UserConfig(token=token, key="display_name", value=body.display_name))
         db.commit()
     return {"ok": True}
 
 @app.get("/api/profile")
-def api_profile(db: Session = Depends(get_db)):
-    display_name = get_config(db, "display_name", "My Espresso Log")
-    total = db.query(func.count(Shot.id)).scalar()
-    avg_rating = db.query(func.avg(Shot.rating)).scalar()
-    roast_count = db.query(func.count(func.distinct(Shot.roast))).scalar()
+def api_profile(token: str = "", db: Session = Depends(get_db)):
+    display_name = get_config(db, token, "display_name", "My Espresso Log")
+    total = db.query(func.count(Shot.id)).filter(Shot.token == token).scalar()
+    avg_rating = db.query(func.avg(Shot.rating)).filter(Shot.token == token).scalar()
+    roast_count = db.query(func.count(func.distinct(Shot.roast))).filter(Shot.token == token).scalar()
     top_shots = (
-        db.query(Shot).order_by(Shot.rating.desc(), Shot.timestamp.desc()).limit(5).all()
+        db.query(Shot).filter(Shot.token == token)
+        .order_by(Shot.rating.desc(), Shot.timestamp.desc()).limit(5).all()
     )
-    recipes = db.query(Recipe).order_by(Recipe.created_at.desc()).all()
+    recipes = db.query(Recipe).filter(Recipe.token == token).order_by(Recipe.created_at.desc()).all()
     return {
         "display_name": display_name,
         "total_shots": total,

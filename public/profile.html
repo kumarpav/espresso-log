@@ -72,7 +72,8 @@
 const starsHtml = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 
 async function load() {
-  const p = await fetch('/api/profile').then(r => r.json());
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const p = await fetch(`/api/profile?token=${encodeURIComponent(token)}`).then(r => r.json());
 
   document.title = `${p.display_name} · Espresso`;
   document.getElementById('display-name').textContent = p.display_name;

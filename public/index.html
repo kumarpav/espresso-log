@@ -269,6 +269,16 @@
 </div>
 
 <script>
+function getToken() {
+  let t = localStorage.getItem('espresso_token');
+  if (!t) { t = crypto.randomUUID(); localStorage.setItem('espresso_token', t); }
+  return t;
+}
+function apiFetch(url, opts = {}) {
+  opts.headers = { ...opts.headers, 'X-User-Token': getToken() };
+  return fetch(url, opts);
+}
+
 let selectedRating = 0;
 let currentTab = 'all';
 let pendingRecipeShot = null;
@@ -445,7 +455,7 @@ async function logShot() {
   }
   setLoading(true);
   document.getElementById('advice-panel').classList.remove('show');
-  const res = await fetch('/shots', {
+  const res = await apiFetch('/shots', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ roast, dose_g: dose, yield_g: yield_, time_s: time, grind_size: grind,
       rating: selectedRating, tasting_notes: document.getElementById('f-tasting').value.trim(),
@@ -480,7 +490,7 @@ function clearForm() {
 // ── Delete shot ───────────────────────────────────────────────────────────────
 async function deleteShot(id) {
   if (!confirm('Delete this shot?')) return;
-  await fetch(`/shots/${id}`, {method:'DELETE'});
+  await apiFetch(`/shots/${id}`, {method:'DELETE'});
   load();
   if (currentTab === 'roasts') loadRoasts();
   if (currentTab === 'progress') loadProgress();
@@ -501,7 +511,7 @@ async function confirmSaveRecipe() {
   const name = document.getElementById('recipe-name-input').value.trim();
   if (!name) { alert('Give your recipe a name.'); return; }
   const s = pendingRecipeShot;
-  await fetch('/recipes', {
+  await apiFetch('/recipes', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ name, roast: s.roast, grind_size: s.grind_size, dose_g: s.dose_g,
       yield_g: s.yield_g, time_s: s.time_s, notes: document.getElementById('recipe-notes-input').value.trim(),
@@ -513,21 +523,21 @@ async function confirmSaveRecipe() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 async function openSettings() {
-  const profile = await fetch('/api/profile').then(r => r.json());
+  const profile = await apiFetch('/api/profile').then(r => r.json());
   document.getElementById('settings-name').value = profile.display_name || '';
   document.getElementById('settings-modal').classList.add('show');
 }
 function closeSettings() { document.getElementById('settings-modal').classList.remove('show'); }
 async function saveSettings() {
   const name = document.getElementById('settings-name').value.trim();
-  await fetch('/api/config', { method:'PATCH', headers:{'Content-Type':'application/json'},
+  await apiFetch('/api/config', { method:'PATCH', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ display_name: name }) });
   closeSettings();
 }
 
 // ── Share profile ─────────────────────────────────────────────────────────────
 function shareProfile() {
-  const url = `${location.origin}/profile`;
+  const url = `${location.origin}/profile?token=${getToken()}`;
   navigator.clipboard.writeText(url).then(() => alert(`Profile URL copied!\n${url}`)).catch(() => alert(`Your profile: ${url}`));
 }
 
@@ -624,7 +634,7 @@ function toggleRoast(roast) {
 
 // ── Progress charts ───────────────────────────────────────────────────────────
 async function loadProgress() {
-  const data = await fetch('/shots/chart').then(r => r.json());
+  const data = await apiFetch('/shots/chart').then(r => r.json());
   chartData = data.by_roast;
   const roasts = Object.keys(chartData);
   activeRatingRoast = '__all__';
@@ -719,13 +729,13 @@ function renderLineChart(canvasId, series, opts = {}) {
 
 // ── Recipes ───────────────────────────────────────────────────────────────────
 async function loadRecipes() {
-  const recipes = await fetch('/recipes').then(r => r.json());
+  const recipes = await apiFetch('/recipes').then(r => r.json());
   renderRecipes(recipes);
 }
 
 async function deleteRecipe(id) {
   if (!confirm('Delete this recipe?')) return;
-  await fetch(`/recipes/${id}`, {method:'DELETE'});
+  await apiFetch(`/recipes/${id}`, {method:'DELETE'});
   loadRecipes();
 }
 
@@ -764,8 +774,8 @@ function renderStats(stats) {
 // ── Load ──────────────────────────────────────────────────────────────────────
 async function load() {
   const [shots, stats] = await Promise.all([
-    fetch('/shots').then(r => r.json()),
-    fetch('/stats').then(r => r.json()),
+    apiFetch('/shots').then(r => r.json()),
+    apiFetch('/stats').then(r => r.json()),
   ]);
   if (stats.total === 0 && !isDemoMode && !demoDismissed) {
     enterDemo();
@@ -776,7 +786,7 @@ async function load() {
 }
 
 async function loadRoasts() {
-  const roasts = await fetch('/roasts').then(r => r.json());
+  const roasts = await apiFetch('/roasts').then(r => r.json());
   renderRoasts(roasts);
 }
 
