@@ -16,8 +16,6 @@
   .header-right { display: flex; gap: 0.6rem; align-items: center; }
   .btn-share { background: rgba(200,147,90,0.15); color: #c8935a; border: 1px solid rgba(200,147,90,0.3); border-radius: 7px; padding: 0.35rem 0.8rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
   .btn-share:hover { background: rgba(200,147,90,0.25); }
-  .btn-settings { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.6); border-radius: 7px; font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 0.35rem 0.8rem; }
-  .btn-settings:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
   .layout { display: grid; grid-template-columns: 360px 1fr; min-height: calc(100vh - 54px); }
 
@@ -153,8 +151,7 @@
     <span>log your shot · get better next time</span>
   </div>
   <div class="header-right">
-    <button class="btn-share" onclick="shareProfile()">Share profile</button>
-    <button class="btn-settings" onclick="openSettings()">Settings</button>
+    <button class="btn-share" id="profile-btn" onclick="handleProfileBtn()">Create profile</button>
   </div>
 </header>
 
@@ -255,11 +252,11 @@
   </div>
 </div>
 
-<!-- Settings modal -->
+<!-- Profile modal -->
 <div class="modal-bg" id="settings-modal">
   <div class="modal-box">
-    <h3>Settings</h3>
-    <label style="font-size:0.78rem;color:rgba(255,255,255,0.5);display:block;margin-bottom:0.3rem">Display name (shown on public profile)</label>
+    <h3 id="profile-modal-title">Create your profile</h3>
+    <label style="font-size:0.78rem;color:rgba(255,255,255,0.5);display:block;margin-bottom:0.3rem">Display name (shown on your public profile page)</label>
     <input id="settings-name" type="text" placeholder="Your name">
     <div class="modal-btns">
       <button class="modal-btn modal-btn-cancel" onclick="closeSettings()">Cancel</button>
@@ -521,24 +518,37 @@ async function confirmSaveRecipe() {
   if (currentTab === 'recipes') loadRecipes();
 }
 
-// ── Settings ──────────────────────────────────────────────────────────────────
-async function openSettings() {
-  const profile = await apiFetch('/api/profile').then(r => r.json());
-  document.getElementById('settings-name').value = profile.display_name || '';
-  document.getElementById('settings-modal').classList.add('show');
-}
-function closeSettings() { document.getElementById('settings-modal').classList.remove('show'); }
-async function saveSettings() {
-  const name = document.getElementById('settings-name').value.trim();
-  await apiFetch('/api/config', { method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ display_name: name }) });
-  closeSettings();
+// ── Profile button ────────────────────────────────────────────────────────────
+let profileCreated = false;
+
+function initProfileBtn() {
+  profileCreated = !!localStorage.getItem('espresso_has_profile');
+  const btn = document.getElementById('profile-btn');
+  btn.textContent = profileCreated ? 'Share profile' : 'Create profile';
 }
 
-// ── Share profile ─────────────────────────────────────────────────────────────
-function shareProfile() {
-  const url = `${location.origin}/profile?token=${getToken()}`;
-  navigator.clipboard.writeText(url).then(() => alert(`Profile URL copied!\n${url}`)).catch(() => alert(`Your profile: ${url}`));
+function handleProfileBtn() {
+  if (profileCreated) {
+    const url = `${location.origin}/profile?token=${getToken()}`;
+    navigator.clipboard.writeText(url).then(() => alert(`Profile URL copied!\n${url}`)).catch(() => alert(`Your profile: ${url}`));
+  } else {
+    document.getElementById('settings-name').value = '';
+    document.getElementById('profile-modal-title').textContent = 'Create your profile';
+    document.getElementById('settings-modal').classList.add('show');
+  }
+}
+
+function closeSettings() { document.getElementById('settings-modal').classList.remove('show'); }
+
+async function saveSettings() {
+  const name = document.getElementById('settings-name').value.trim();
+  if (!name) { alert('Please enter a display name.'); return; }
+  await apiFetch('/api/config', { method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ display_name: name }) });
+  localStorage.setItem('espresso_has_profile', '1');
+  profileCreated = true;
+  document.getElementById('profile-btn').textContent = 'Share profile';
+  closeSettings();
 }
 
 // ── Prefill from recipe ───────────────────────────────────────────────────────
@@ -791,6 +801,7 @@ async function loadRoasts() {
 }
 
 load();
+initProfileBtn();
 </script>
 </body>
 </html>
