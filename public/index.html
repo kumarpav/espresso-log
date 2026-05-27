@@ -49,6 +49,15 @@
 
   /* ── Right panel ── */
   .main-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Demo banner ── */
+  .demo-banner { display: none; background: linear-gradient(135deg, rgba(200,147,90,0.18), rgba(200,147,90,0.07)); border-bottom: 1px solid rgba(200,147,90,0.35); padding: 0.85rem 1.25rem; align-items: center; justify-content: space-between; gap: 1rem; flex-shrink: 0; }
+  .demo-banner-text { font-size: 0.82rem; color: rgba(255,255,255,0.75); line-height: 1.5; }
+  .demo-banner-text strong { color: #e8b87a; font-weight: 700; }
+  .demo-banner-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+  .btn-demo-start { background: #c8935a; color: #1a1008; border: none; border-radius: 7px; padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn-demo-start:hover { opacity: 0.88; }
+
   .stats-bar { display: flex; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
   .stat { flex: 1; padding: 0.9rem 1rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.06); }
   .stat:last-child { border-right: none; }
@@ -77,11 +86,12 @@
   .shot-advice { background: rgba(200,147,90,0.08); border-left: 2px solid #c8935a; border-radius: 0 6px 6px 0; padding: 0.6rem 0.8rem; margin-top: 0.4rem; }
   .shot-advice-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.8px; color: #c8935a; font-weight: 700; margin-bottom: 0.25rem; }
   .shot-advice-text { font-size: 0.8rem; color: rgba(255,255,255,0.7); line-height: 1.55; white-space: pre-wrap; }
-  .shot-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; }
+  .shot-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem; align-items: center; }
   .btn-sm-action { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.6); border-radius: 6px; padding: 0.25rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
   .btn-sm-action:hover { background: rgba(200,147,90,0.15); color: #c8935a; border-color: rgba(200,147,90,0.3); }
   .btn-delete { background: none; border: none; color: rgba(255,255,255,0.15); cursor: pointer; font-size: 0.75rem; padding: 0.25rem 0.5rem; }
   .btn-delete:hover { color: #e74c3c; }
+  .demo-label { font-size: 0.72rem; color: rgba(255,255,255,0.2); font-style: italic; }
 
   /* ── By roast ── */
   .roast-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 0.85rem; overflow: hidden; }
@@ -131,6 +141,7 @@
   @media (max-width: 720px) {
     .layout { grid-template-columns: 1fr; }
     .form-panel { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .demo-banner { flex-direction: column; align-items: flex-start; }
   }
 </style>
 </head>
@@ -184,6 +195,14 @@
 
   <!-- Right panel -->
   <div class="main-panel">
+    <div class="demo-banner" id="demo-banner">
+      <div class="demo-banner-text">
+        <strong>Welcome to Espresso Coach!</strong> This is sample data showing a real dial-in journey across 3 roasts — see how the advice evolves shot by shot. Log your first real pull to start your own log.
+      </div>
+      <div class="demo-banner-actions">
+        <button class="btn-demo-start" onclick="dismissDemo()">Start logging my shots</button>
+      </div>
+    </div>
     <div class="stats-bar">
       <div class="stat"><div class="stat-val" id="s-total">—</div><div class="stat-label">Shots logged</div></div>
       <div class="stat"><div class="stat-val" id="s-rating">—</div><div class="stat-label">Avg rating</div></div>
@@ -258,7 +277,134 @@ let chartTime = null;
 let chartData = null;
 let activeRatingRoast = '__all__';
 let activeTimeRoast = '__all__';
+let isDemoMode = false;
 const ROAST_COLORS = ['#c8935a','#e8b88a','#a0d8b0','#88c8e8','#d8a8e8','#e8d888','#e88888'];
+
+// ── Demo data ─────────────────────────────────────────────────────────────────
+const DEMO_SHOTS = [
+  {
+    id: 'd1', timestamp: '2026-04-27T09:15:00',
+    roast: 'Ethiopia Yirgacheffe', grind_size: 14, dose_g: 18, yield_g: 42, time_s: 19, rating: 2, ratio: 2.33,
+    tasting_notes: 'Very sour and sharp, like lemon juice — thin and watery',
+    notes: '',
+    advice: `1. Grind finer by 1.5–2 clicks — your 19-second pull is well under the 25–35s ideal, meaning water is blasting through too fast and leaving sweetness behind. That's the sourness.\n2. Reduce yield from 42g to 36–38g — a 1:2.3 ratio will taste more concentrated and less watery.\n3. Make sure your tamp is level and firm — uneven pressure can cause channelling and speed up extraction.\n\nGreat first attempt! Sourness is actually useful feedback — it tells you exactly what to fix.`
+  },
+  {
+    id: 'd2', timestamp: '2026-04-30T08:45:00',
+    roast: 'Colombia Huila', grind_size: 13, dose_g: 18, yield_g: 45, time_s: 17, rating: 2, ratio: 2.5,
+    tasting_notes: 'Watery with a harsh bitter finish — barely any body',
+    notes: 'Pulled very fast',
+    advice: `1. Go finer on the grind by 2 clicks — 17 seconds is severely under-extracted. The bitterness is likely astringency from uneven extraction, not over-extraction.\n2. Reduce yield from 45g to 36g — you're diluting an already under-extracted shot. Pull it shorter.\n3. Pre-infuse if your machine supports it — a 3–5 second pre-soak can help even out extraction on fresh beans.\n\nThis is a very common starting point — a couple of grind adjustments and this roast will open up beautifully!`
+  },
+  {
+    id: 'd3', timestamp: '2026-05-03T10:00:00',
+    roast: 'Ethiopia Yirgacheffe', grind_size: 12.5, dose_g: 18, yield_g: 38, time_s: 24, rating: 3, ratio: 2.11,
+    tasting_notes: 'Less sour now, some citrus coming through — still a bit flat',
+    notes: '',
+    advice: `1. Go just 0.5–1 click finer — you're right on the edge of the ideal range at 24 seconds. A tiny push will give you more body and sweetness.\n2. Keep yield at 36–38g — you've already improved here and the ratio is dialling in nicely.\n3. Note the citrus notes emerging — that's the Ethiopian character starting to show. Once your time hits 27–30s, expect those flavours to really sing.\n\nYou went from a 2 to a 3 in one adjustment — that's rapid progress. Keep going!`
+  },
+  {
+    id: 'd4', timestamp: '2026-05-06T09:20:00',
+    roast: 'Colombia Huila', grind_size: 11, dose_g: 18, yield_g: 38, time_s: 25, rating: 3, ratio: 2.11,
+    tasting_notes: 'Dark chocolate notes, slight bitterness at the end still',
+    notes: '',
+    advice: `1. Try 0.5 click finer or reduce yield slightly to 36g — you're just entering the ideal time range. The lingering bitterness suggests you could push extraction a touch more evenly.\n2. Keep dose at 18g — that's working well for this roast.\n3. The chocolate notes are the Colombia character coming through — once you dial out that last bit of bitterness, you'll have something really satisfying.\n\nYou've turned a flat shot into something with real character. One more small tweak should nail it!`
+  },
+  {
+    id: 'd5', timestamp: '2026-05-09T08:30:00',
+    roast: 'Guatemala Antigua', grind_size: 15, dose_g: 18, yield_g: 40, time_s: 18, rating: 2, ratio: 2.22,
+    tasting_notes: 'Harsh, astringent, very fast — almost unpleasant',
+    notes: 'Puck looked a bit dry',
+    advice: `1. Grind finer by 2.5–3 clicks — 18 seconds is far too fast. Astringency is a hallmark of severe under-extraction.\n2. Improve your puck prep — if the puck looked dry, you may have uneven distribution. Try WDT or a distributor tool before tamping.\n3. Aim for 36g yield at 27–32 seconds — Guatemala Antigua is a medium roast that needs solid extraction time to develop its nutty sweetness.\n\nDon't be discouraged — astringency just means under-extraction, and that's the easiest thing to fix. Grind finer and this will transform!`
+  },
+  {
+    id: 'd6', timestamp: '2026-05-12T09:45:00',
+    roast: 'Colombia Huila', grind_size: 10.5, dose_g: 18, yield_g: 36, time_s: 30, rating: 5, ratio: 2.0,
+    tasting_notes: 'Dark chocolate, caramel, sweet clean finish — absolutely perfect',
+    notes: '',
+    advice: `This is a dialled-in shot! A few notes to lock it in:\n1. Save these settings as a recipe — grind 10.5, 18g→36g, 30s is your sweet spot for this Colombia.\n2. Watch for roast age — as the bag ages past 3–4 weeks, you may need to go 0.5 click finer to compensate for degassing.\n3. If you open a new bag and it tastes different, start half a click finer and work from there.\n\nFive stars! You've successfully dialled in Colombia Huila. This is what all that iterating was working towards — enjoy every cup!`
+  },
+  {
+    id: 'd7', timestamp: '2026-05-15T10:15:00',
+    roast: 'Ethiopia Yirgacheffe', grind_size: 11.5, dose_g: 18, yield_g: 36, time_s: 29, rating: 4, ratio: 2.0,
+    tasting_notes: 'Bright citrus, jasmine floral notes, really nice balance',
+    notes: '',
+    advice: `Beautiful shot! A few suggestions to push to 5 stars:\n1. Try reducing yield by 1–2g to 34–35g — it might concentrate those floral notes even more intensely.\n2. Consider a slightly lower temperature if your machine allows — Ethiopian naturals often express fruit notes better at 90–91°C vs 93°C.\n3. Your timing and grind are dialled in — this is a recipe worth saving.\n\nYou've completely transformed this roast from sour to genuinely impressive. The progression from shot 1 to here is textbook dial-in technique!`
+  },
+  {
+    id: 'd8', timestamp: '2026-05-18T09:00:00',
+    roast: 'Guatemala Antigua', grind_size: 12, dose_g: 18, yield_g: 36, time_s: 26, rating: 4, ratio: 2.0,
+    tasting_notes: 'Nutty, mild chocolate, good body — much better!',
+    notes: 'Puck prep improved',
+    advice: `Great improvement! A couple of refinements:\n1. Try 0.5 click finer to push your time to 29–31 seconds — you're right at the low end of ideal and a little more extraction will add sweetness.\n2. Bump dose to 18.5g — Guatemalan medium roasts tend to have great body at slightly higher doses.\n3. Your puck prep improvement clearly helped — keep doing exactly what you did.\n\nYou went from astringent to genuinely tasty in two shots. The nutty character is the Guatemala Antigua expressing itself — you're almost there!`
+  },
+  {
+    id: 'd9', timestamp: '2026-05-21T08:45:00',
+    roast: 'Guatemala Antigua', grind_size: 11.5, dose_g: 18.5, yield_g: 36, time_s: 28, rating: 5, ratio: 1.95,
+    tasting_notes: 'Perfect balance — walnut, dark cocoa, lingering sweetness',
+    notes: '',
+    advice: `Another dialled-in shot — you're on a roll!\n1. Save this as a recipe immediately — grind 11.5, 18.5g→36g, 28s is your Guatemala Antigua sweet spot.\n2. This roast has great body at a 1:1.95 ratio — don't be tempted to go much higher yield.\n3. If you notice inconsistency day-to-day, check your grinder's retention and purge a gram before each session.\n\nTwo five-star shots in one week — you've officially crossed from beginner to intermediate barista. Those walnut and cocoa notes are stunning!`
+  },
+];
+
+const DEMO_RECIPES = [
+  { id: 'r1', name: 'Ethiopia Morning', roast: 'Ethiopia Yirgacheffe', grind_size: 11.5, dose_g: 18, yield_g: 36, time_s: 29, notes: 'Bright and floral — my go-to', ratio: 2.0 },
+  { id: 'r2', name: 'Huila Daily Driver', roast: 'Colombia Huila', grind_size: 10.5, dose_g: 18, yield_g: 36, time_s: 30, notes: 'Dark chocolate + caramel perfection', ratio: 2.0 },
+  { id: 'r3', name: 'Guatemala Weekend', roast: 'Guatemala Antigua', grind_size: 11.5, dose_g: 18.5, yield_g: 36, time_s: 28, notes: 'Nutty and rich, great body', ratio: 1.95 },
+];
+
+const DEMO_CHART_DATES = {
+  'd1': 'Apr 27', 'd2': 'Apr 30', 'd3': 'May 3',
+  'd4': 'May 6',  'd5': 'May 9',  'd6': 'May 12',
+  'd7': 'May 15', 'd8': 'May 18', 'd9': 'May 21',
+};
+
+function getDemoStats() {
+  const n = DEMO_SHOTS.length;
+  const avgRating = DEMO_SHOTS.reduce((s, x) => s + x.rating, 0) / n;
+  const avgTime   = DEMO_SHOTS.reduce((s, x) => s + x.time_s, 0) / n;
+  const avgDose   = DEMO_SHOTS.reduce((s, x) => s + x.dose_g, 0) / n;
+  const avgYield  = DEMO_SHOTS.reduce((s, x) => s + x.yield_g, 0) / n;
+  return { total: n, avg_rating: Math.round(avgRating * 10) / 10,
+    avg_time_s: Math.round(avgTime * 10) / 10, avg_dose_g: Math.round(avgDose * 10) / 10,
+    avg_yield_g: Math.round(avgYield * 10) / 10 };
+}
+
+function getDemoRoasts() {
+  const byRoast = {};
+  DEMO_SHOTS.forEach(s => { if (!byRoast[s.roast]) byRoast[s.roast] = []; byRoast[s.roast].push(s); });
+  return Object.entries(byRoast).map(([roast, shots]) => {
+    const avg = shots.reduce((sum, s) => sum + s.rating, 0) / shots.length;
+    const best = shots.reduce((b, s) => s.rating > b.rating ? s : b, shots[0]);
+    return { roast, count: shots.length, avg_rating: Math.round(avg * 10) / 10,
+      best_shot: best, shots: [...shots].reverse() };
+  });
+}
+
+function getDemoChartData() {
+  const byRoast = {};
+  DEMO_SHOTS.forEach((s, idx) => {
+    if (!byRoast[s.roast]) byRoast[s.roast] = [];
+    byRoast[s.roast].push({ date: DEMO_CHART_DATES[s.id], rating: s.rating, grind_size: s.grind_size, time_s: s.time_s, id: idx + 1 });
+  });
+  return byRoast;
+}
+
+function enterDemo() {
+  isDemoMode = true;
+  document.getElementById('demo-banner').style.display = 'flex';
+  renderStats(getDemoStats());
+  renderShots(DEMO_SHOTS);
+}
+
+function dismissDemo() {
+  isDemoMode = false;
+  document.getElementById('demo-banner').style.display = 'none';
+  load();
+  if (currentTab === 'roasts') loadRoasts();
+  if (currentTab === 'progress') loadProgress();
+  if (currentTab === 'recipes') loadRecipes();
+}
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
@@ -266,6 +412,12 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['all','roasts','progress','recipes'][i] === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
+  if (isDemoMode) {
+    if (name === 'roasts') renderRoasts(getDemoRoasts());
+    if (name === 'progress') loadDemoProgress();
+    if (name === 'recipes') renderRecipes(DEMO_RECIPES);
+    return;
+  }
   if (name === 'roasts') loadRoasts();
   if (name === 'progress') loadProgress();
   if (name === 'recipes') loadRecipes();
@@ -305,7 +457,8 @@ async function logShot() {
       document.getElementById('advice-panel').classList.add('show');
     }
     clearForm();
-    load();
+    if (isDemoMode) dismissDemo();
+    else load();
   } else { alert('Error logging shot.'); }
 }
 
@@ -416,8 +569,11 @@ function shotCardHtml(s, showRoast = true) {
     ${s.tasting_notes ? `<div class="shot-tasting">"${s.tasting_notes}"</div>` : ''}
     ${s.advice ? `<div class="shot-advice"><div class="shot-advice-label">Coach says</div><div class="shot-advice-text">${s.advice}</div></div>` : ''}
     <div class="shot-footer">
-      <button class="btn-sm-action" onclick='openRecipeModal(${JSON.stringify(s)})'>Save as recipe</button>
-      <button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button>
+      ${isDemoMode
+        ? `<span class="demo-label">sample data — log your own shots to start tracking</span>`
+        : `<button class="btn-sm-action" onclick='openRecipeModal(${JSON.stringify(s)})'>Save as recipe</button>
+           <button class="btn-delete" onclick="deleteShot(${s.id})">✕ delete</button>`
+      }
     </div>
   </div>`;
 }
@@ -469,7 +625,19 @@ async function loadProgress() {
   const data = await fetch('/shots/chart').then(r => r.json());
   chartData = data.by_roast;
   const roasts = Object.keys(chartData);
+  activeRatingRoast = '__all__';
+  activeTimeRoast = '__all__';
+  buildFilterBtns('rating-filter', roasts, '__all__', r => { activeRatingRoast = r; renderRatingChart(); });
+  buildFilterBtns('time-filter', roasts, '__all__', r => { activeTimeRoast = r; renderTimeChart(); });
+  renderRatingChart();
+  renderTimeChart();
+}
 
+function loadDemoProgress() {
+  chartData = getDemoChartData();
+  const roasts = Object.keys(chartData);
+  activeRatingRoast = '__all__';
+  activeTimeRoast = '__all__';
   buildFilterBtns('rating-filter', roasts, '__all__', r => { activeRatingRoast = r; renderRatingChart(); });
   buildFilterBtns('time-filter', roasts, '__all__', r => { activeTimeRoast = r; renderTimeChart(); });
   renderRatingChart();
@@ -577,7 +745,7 @@ function renderRecipes(recipes) {
       ${r.notes ? `<div class="recipe-notes">${r.notes}</div>` : ''}
       <div class="recipe-actions">
         <button class="btn-sm-action" onclick='prefillFromRecipe(${JSON.stringify(r)})'>Use settings</button>
-        <button class="btn-delete" onclick="deleteRecipe(${r.id})">✕</button>
+        ${isDemoMode ? '' : `<button class="btn-delete" onclick="deleteRecipe(${r.id})">✕</button>`}
       </div>
     </div>`).join('')}</div>`;
 }
@@ -597,6 +765,10 @@ async function load() {
     fetch('/shots').then(r => r.json()),
     fetch('/stats').then(r => r.json()),
   ]);
+  if (stats.total === 0 && !isDemoMode) {
+    enterDemo();
+    return;
+  }
   renderShots(shots);
   renderStats(stats);
 }
