@@ -278,6 +278,7 @@ let chartData = null;
 let activeRatingRoast = '__all__';
 let activeTimeRoast = '__all__';
 let isDemoMode = false;
+let demoDismissed = false;
 const ROAST_COLORS = ['#c8935a','#e8b88a','#a0d8b0','#88c8e8','#d8a8e8','#e8d888','#e88888'];
 
 // ── Demo data ─────────────────────────────────────────────────────────────────
@@ -399,6 +400,7 @@ function enterDemo() {
 
 function dismissDemo() {
   isDemoMode = false;
+  demoDismissed = true;
   document.getElementById('demo-banner').style.display = 'none';
   load();
   if (currentTab === 'roasts') loadRoasts();
@@ -765,7 +767,7 @@ async function load() {
     fetch('/shots').then(r => r.json()),
     fetch('/stats').then(r => r.json()),
   ]);
-  if (stats.total === 0 && !isDemoMode) {
+  if (stats.total === 0 && !isDemoMode && !demoDismissed) {
     enterDemo();
     return;
   }
